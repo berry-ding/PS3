@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ps3"
+version = "0.1.0"
+description = "Scaling Vision Pre-Training to 4K Resolution"
+readme = "README.md"
+authors = [
+    { name = "Baifeng Shi", email = "baifeng_shi@berkeley.edu" }
+]
+license = { text = "Apache 2.0" }
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+]
+dependencies = [
+    "torch",
+    "torchvision",
+    "transformers[sentencepiece]",
+    "timm==0.9.12",
+    "einops",
+    "accelerate",
+    "pillow",
+    "tiktoken",
+]
+
+[project.urls]
+Homepage = "https://nvlabs.github.io/PS3"
+Code = "https://github.com/NVlabs/PS3"
