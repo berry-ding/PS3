@@ -19,8 +19,7 @@ from einops import rearrange
 
 try:
     import timm
-    from timm.models.layers import Mlp, to_2tuple
-    from timm.layers import DropPath, use_fused_attn, LayerNorm2d, PatchEmbed, resample_abs_pos_embed, AttentionPoolLatent
+    from timm.layers import Mlp, DropPath, use_fused_attn, LayerNorm2d, PatchEmbed, resample_abs_pos_embed, AttentionPoolLatent
     from timm.layers.trace_utils import _assert
     from timm.layers.format import Format, nchw_to
     from timm.models.vision_transformer import LayerScale
@@ -957,6 +956,7 @@ class Attention_w_KVCache(nn.Module):
             num_heads: int = 8,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: nn.Module = nn.LayerNorm,
@@ -972,7 +972,7 @@ class Attention_w_KVCache(nn.Module):
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
+        self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor, kv_cache=None, return_kv_cache=False) -> torch.Tensor:
@@ -1019,6 +1019,7 @@ class Block_w_KVCache(nn.Module):
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
+            proj_bias: bool = True,
             proj_drop: float = 0.,
             attn_drop: float = 0.,
             init_values: Optional[float] = None,
@@ -1034,6 +1035,7 @@ class Block_w_KVCache(nn.Module):
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
+            proj_bias=proj_bias,
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
@@ -1046,6 +1048,7 @@ class Block_w_KVCache(nn.Module):
             in_features=dim,
             hidden_features=int(dim * mlp_ratio),
             act_layer=act_layer,
+            bias=proj_bias,
             drop=proj_drop,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
