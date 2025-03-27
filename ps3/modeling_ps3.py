@@ -124,6 +124,7 @@ class PS3VisionEncoder(nn.Module):
         self.s3_image_size = self.s3_scales[-1]
 
         self.num_hidden_layers_to_return = self.layers
+        warnings.warn(f"The number of hidden layers to return hidden states is currently set to {self.num_hidden_layers_to_return}. If this value is large, it can consume a lot of memory. Consider setting it to a smaller value if you won't use all the hidden states from every layer!")
         self.low_res_token_num = self.trunk.low_res_token_num = (self.s3_scales[0] // self.trunk.patch_embed.patch_size[0]) ** 2
 
         # token selection args and params
@@ -466,7 +467,6 @@ class PS3VisionEncoder(nn.Module):
                     hidden_states=low_res_hidden_states,
                     selection_probs=select_probs
                 )
-
 
             if num_look_close == "all" or num_token_look_close == 'all':  # Process all the high-res patches
                 num_look_close = math.ceil(self.max_highres_token_num(x, only_select_first_n_scale) / sum(self.max_select_num_each_scale))
