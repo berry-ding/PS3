@@ -1,14 +1,26 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
-import logging
-import random
 import warnings
 import types
 from dataclasses import dataclass
-from collections import OrderedDict
 from functools import partial
 from typing import Optional
 from copy import deepcopy
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -17,21 +29,17 @@ from torch.utils.checkpoint import checkpoint
 from torch.jit import Final
 from einops import rearrange
 
-try:
-    import timm
-    from timm.layers import Mlp, DropPath, use_fused_attn, LayerNorm2d, PatchEmbed, resample_abs_pos_embed, AttentionPoolLatent
-    from timm.layers.trace_utils import _assert
-    from timm.layers.format import Format, nchw_to
-    from timm.models.vision_transformer import LayerScale
-    from timm.models.convnext import ConvNeXtBlock
-except ImportError:
-    timm = None
+import timm
+from timm.layers import Mlp, DropPath, use_fused_attn, LayerNorm2d, PatchEmbed, resample_abs_pos_embed, AttentionPoolLatent
+from timm.layers.trace_utils import _assert
+from timm.layers.format import Format, nchw_to
+from timm.models.vision_transformer import LayerScale
+from timm.models.convnext import ConvNeXtBlock
 
 from transformers.modeling_utils import PreTrainedModel
 from transformers.modeling_outputs import BaseModelOutputWithNoAttention
 
 from .modeling_ps3_text import TextTransformer
-from .radio_adapter_mlp import create_mlp_from_config
 from .configuration_ps3 import PS3VisionConfig, PS3TextConfig, PS3Config
 
 
@@ -101,6 +109,10 @@ class PS3VisionEncoder(nn.Module):
         # Customization for RADIO
         self.trunk.radio = config.radio
         if config.radio:
+            try:
+                from .radio_adapter_mlp import create_mlp_from_config
+            except ImportError:
+                raise ImportError("Please import the create_mlp_from_config function from https://github.com/NVlabs/RADIO/blob/main/radio/adaptor_mlp.py.")
             # Remove the final norm
             if hasattr(self.trunk, "norm") and not config.final_norm:
                 self.trunk.norm = nn.Identity()
@@ -689,6 +701,9 @@ class PS3Model(PS3PreTrainedModel):
 
 class ConvNeXtBlock_HFSavePreTrainedFix(ConvNeXtBlock):
     """ 
+    Adapted from timm ConvNeXt: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/convnext.py
+    Original license: Apache-2.0, Copyright 2022, Ross Wightman
+
     In huggingface transformer's save_pretrained function, if a parameter's name contains "gamma",
     automatically replace "gamma" with "weight" in the state_dict. This will cause the gamma parameter
     to be saved in a different name and won't be correctly loaded later. Same issue happens for 
@@ -763,6 +778,13 @@ class ShallowConvNet(nn.Module):
 
 
 class SelectedPatchEmbed(PatchEmbed):
+    """
+    Adapted from timm PatchEmbed: https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/patch_embed.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+    
+    Adapted to support only running patch embedding on selected patches.
+    """
+
     def selected_proj(self, x, selection_map):
         B = x.shape[0]
         out_channels, _, kh, kw = self.proj.weight.shape
@@ -834,6 +856,13 @@ def resample_abs_pos_embed(
         antialias: bool = True,
         use_cpe: bool = False,
 ):
+    """
+    Adapted from timm resample_abs_pos_embed: https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/pos_embed.py
+    Original license: Apache-2.0, Copyright 2022, Ross Wightman
+    
+    Adapted to support cropped position embedding (cpe).
+    """
+
     # sort out sizes, assume square if old size not provided
     num_pos_tokens = posemb.shape[1]
     num_new_tokens = new_size[0] * new_size[1] + num_prefix_tokens
@@ -868,6 +897,13 @@ def resample_abs_pos_embed(
 
 
 def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
+    """
+    Adapted from timm vision_transformer.py: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+    
+    Adapted to support cropped position embedding (cpe).
+    """
+
     if self.pos_embed is None:
         return x.view(x.shape[0], -1, x.shape[-1])
 
@@ -908,6 +944,13 @@ def _pos_embed(self, x: torch.Tensor) -> torch.Tensor:
 
 
 def selected_pos_embed(self, x: torch.Tensor, selection_map, im_H, im_W) -> torch.Tensor:
+    """
+    Adapted from timm vision_transformer.py: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+    
+    Adapted to support position embedding on selected patches only and cropped position embedding (cpe).
+    """
+
     if self.pos_embed is None:
         return x.view(x.shape[0], -1, x.shape[-1])
 
@@ -953,6 +996,13 @@ def selected_pos_embed(self, x: torch.Tensor, selection_map, im_H, im_W) -> torc
 
 
 class Attention_w_KVCache(nn.Module):
+    """
+    Adapted from timm vision_transformer.py: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+    
+    Adapted to support attention with low-res KV cache.
+    """
+
     fused_attn: Final[bool]
 
     def __init__(
@@ -1017,6 +1067,13 @@ class Attention_w_KVCache(nn.Module):
     
 
 class Block_w_KVCache(nn.Module):
+    """
+    Adapted from timm vision_transformer.py: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+    
+    Adapted to support attention with low-res KV cache.
+    """
+
     def __init__(
             self,
             dim: int,
@@ -1083,6 +1140,9 @@ def forward_tokenize(self, x, selection_map=None, im_H=None, im_W=None):
 
 def forward_after_tokenize_w_kvcache(self, x, kv_cache=None, return_kv_cache=False, output_hidden_states=False, pool_mask=None):
     """
+    Adapted from timm vision_transformer.py: https://github.com/huggingface/pytorch-image-models/blob/main/timm/models/vision_transformer.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+
     Forward pass of the original timm ViT, but only the part after tokenization (patch_embed and _pos_embed).
     """
 
@@ -1134,6 +1194,13 @@ def forward_after_tokenize_w_kvcache(self, x, kv_cache=None, return_kv_cache=Fal
 
 
 def forward_attn_pool_with_mask(self, x, mask=None):
+    """
+    Adapted from timm attention_pool.py: https://github.com/huggingface/pytorch-image-models/blob/main/timm/layers/attention_pool.py
+    Original license: Apache-2.0, Copyright 2020, Ross Wightman
+    
+    Adapted to support attention pooling only on a masked (selected) region.
+    """
+
     # mask: (B, N)
 
     B, N, C = x.shape
