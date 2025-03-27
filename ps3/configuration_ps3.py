@@ -14,11 +14,14 @@
 # limitations under the License.
 """ViT model configuration"""
 
+import os
+from typing import Union
 from collections import OrderedDict
 from typing import Mapping
 
 from packaging import version
 
+import transformers
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
 
@@ -99,6 +102,27 @@ class PS3VisionConfig(PretrainedConfig):
         self.vision_tower_name = model_name
         self.image_size = s3_scales[-1]
         self.patch_size = 14
+    
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        if version.parse(version.parse(transformers.__version__).base_version) >= version.parse("4.47.0"):
+            return super().from_pretrained(pretrained_model_name_or_path, **kwargs)
+
+        cls._set_token_in_kwargs(kwargs)
+
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
+
+        # get the vision config dict if we are loading from SiglipConfig
+        if config_dict.get("model_type") == "ps3":
+            config_dict = config_dict["vision_config"]
+
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        return cls.from_dict(config_dict, **kwargs)
         
 
 class PS3TextConfig(PretrainedConfig):
@@ -152,6 +176,27 @@ class PS3TextConfig(PretrainedConfig):
         self.output_tokens = output_tokens
         self.act_kwargs = act_kwargs
         self.norm_kwargs = norm_kwargs
+    
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        if version.parse(version.parse(transformers.__version__).base_version) >= version.parse("4.47.0"):
+            return super().from_pretrained(pretrained_model_name_or_path, **kwargs)
+
+        cls._set_token_in_kwargs(kwargs)
+
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
+
+        # get the text config dict if we are loading from SiglipConfig
+        if config_dict.get("model_type") == "ps3":
+            config_dict = config_dict["text_config"]
+
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        return cls.from_dict(config_dict, **kwargs)
 
 
 class PS3Config(PretrainedConfig):

@@ -461,7 +461,11 @@ class PS3VisionEncoder(nn.Module):
         if output_hidden_states:
             # Only process the low-res features
             if num_look_close == 0 or num_token_look_close == 0:
-                return low_res_hidden_states, None, select_probs
+                return PS3VisionModelOutput(
+                    last_hidden_state=low_res_hidden_states[-1],
+                    hidden_states=low_res_hidden_states,
+                    selection_probs=select_probs
+                )
 
             if num_look_close == "all" or num_token_look_close == 'all':  # Process all the high-res patches
                 num_look_close = math.ceil(self.max_highres_token_num(x, only_select_first_n_scale) / sum(self.max_select_num_each_scale))
