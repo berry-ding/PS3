@@ -12,6 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Adapted from https://github.com/mlfoundations/open_clip/blob/main/src/open_clip/transformer.py
+Originally license: https://github.com/mlfoundations/open_clip/blob/main/LICENSE.
+Copyright (c) 2012-2021 Gabriel Ilharco, Mitchell Wortsman, 
+Nicholas Carlini, Rohan Taori, Achal Dave, Vaishaal Shankar, 
+John Miller, Hongseok Namkoong, Hannaneh Hajishirzi, Ali Farhadi, 
+Ludwig Schmidt
+"""
 
 from collections import OrderedDict
 import math
