@@ -459,6 +459,36 @@ class PS3VisionEncoder(nn.Module):
 
         return agg_features
 
+    def format_features_into_feature_maps(self, features, selection_maps):
+        """
+        features: B * N * C tensor containing both low-res and high-res features
+        selection_maps: list of B * H * W tensors, len(list) = num_scale - 1. Each tensor is a binary mask.
+        """
+        B, _, C = features.shape
+        high_res_selection_num = sum([x.sum(dim=(-1, -2)) for x in selection_maps])
+        assert torch.all(high_res_selection_num + self.low_res_token_num == features.shape[1]), \
+            f"Number of selected tokens must be the same as the number of features, but now {high_res_selection_num + self.low_res_token_num} != {features.shape[1]}"
+
+        # Add the selection map for the low-res tokens. Assume always selecting all low-res tokens.
+        selection_maps = [torch.ones(B, int(self.low_res_token_num**0.5), int(self.low_res_token_num**0.5), device=selection_maps[0].device, dtype=selection_maps[0].dtype)] + selection_maps
+        
+        # Flatten the selection maps and features across all scales and all instances
+        flatten_selection_maps = torch.cat([x.flatten(1, 2) for x in selection_maps], dim=-1).flatten(0, 1)  # (B * N_full)
+        flatten_features = features.flatten(0, 1)  # (B * N) * C
+
+        # Create a full feature tensor by placing the flattened features into the positions specified by the flattened selection maps
+        full_features = torch.zeros(flatten_selection_maps.shape[0], C, dtype=features.dtype, device=features.device)
+        full_features[flatten_selection_maps == 1] = flatten_features
+        full_features = full_features.reshape(B, -1, C)
+
+        # Format the full features into feature maps for each scale
+        feature_map_size_each_scale = [(x.shape[1], x.shape[2]) for x in selection_maps]
+        full_features = full_features.split([x[0] * x[1] for x in feature_map_size_each_scale], dim=1)
+        full_feature_maps = [rearrange(x, 'b (h w) c -> b c h w', h=feature_map_size_each_scale[i][0], w=feature_map_size_each_scale[i][1]) for i, x in enumerate(full_features)]
+
+        return full_feature_maps
+
+
     def forward(self, x: torch.Tensor, prompt=None, gt_selection_maps=None, is_global_text=None, output_hidden_states=False, pool_gt_token_only=False, num_look_close=None, num_token_look_close=None, smooth_selection_prob=False, only_select_first_n_scale=None):
 
         # get low-res features
