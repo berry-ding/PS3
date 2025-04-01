@@ -31,7 +31,7 @@
 <hr style="border: 2px solid gray;"></hr>
 
 ## Latest Updates
-- [2025.2.24] Initial paper release.
+- [2025.3.25] Initial paper release.
 
 
 <hr style="border: 2px solid gray;"></hr>
