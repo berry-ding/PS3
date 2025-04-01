@@ -38,6 +38,7 @@ class PS3ImageProcessor(BaseImageProcessor):
         std: Optional[Tuple[float, ...]] = None,
         resize_mode: Optional[str] = None,
         interpolation: Optional[str] = None,
+        **kwargs,
     ):
         self.image_size = image_size
         if isinstance(self.image_size, int):
