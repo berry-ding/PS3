@@ -12,7 +12,7 @@
   <a href="https://bfshi.github.io" target="_blank" style="color: #6f6f6f; text-decoration: none;">Baifeng Shi</a><sup style="font-size: 0.6em;">1,2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://sites.google.com/site/boyilics/home" target="_blank" style="color: #6f6f6f; text-decoration: none;">Boyi Li</a><sup style="font-size: 0.6em;">1,2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://han-cai.github.io/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Han Cai</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
-  <a href="https://scholar.google.com/citations?user=OI7zFmwAAAAJ&hl=en/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Yao Lu</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
+  <a href="https://scholar.google.com/cit+ations?user=OI7zFmwAAAAJ&hl=en/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Yao Lu</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://sifeiliu.net/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Sifei Liu</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://research.nvidia.com/person/marco-pavone" target="blank" style="color: #6f6f6f; text-decoration: none;">Marco Pavone</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
   <br>
@@ -167,6 +167,9 @@ save_visualization(selection_probs, image, "save_path/bottom_up_selection_probs"
 ```
 `selection_probs` contains the selection probability map for each scale. In this case, the feature map of each scale has shapes of 54x54, 108x108, and 270x270. The selection probability reflects how salient/important each patch is and patches with higher probability are selected first. You can visit the demo for more visualization.
 
+![Bottom-Up Selection Probabilities](assets/example_selection_maps/bottom_up_selection_prob.png)
+
+
 
 
 
@@ -200,6 +203,8 @@ selection_probs = outs.selection_probs
 save_visualization(selection_probs, image, "save_path/top_down_selection_probs_1")
 ```
 
+![Top-Down Selection Probabilities](assets/example_selection_maps/top_down_selection_prob_1.png)
+
 You can change to another text prompt and see different selection probabilities.
 ```python
 text = ["A green rope on the green and red boat."]
@@ -210,7 +215,18 @@ selection_probs = outs.selection_probs
 save_visualization(selection_probs, image, "save_path/top_down_selection_probs_2")
 ```
 
+![Top-Down Selection Probabilities](assets/example_selection_maps/top_down_selection_prob_2.png)
+
 ### 4. Format the Encoded Features into (Masked) Feature Maps
+
+The features returned above are the concatenation of all the low-res and high-res features.
+
+You can format the features into masked feature maps for each scale.
+```python
+feature_maps = vision_model.vision_model.format_features_into_feature_maps(outs.last_hidden_state, outs.selection_maps)
+print([x.shape for x in feature_maps])  # [(1, 1152, 27, 27), (1, 1152, 54, 54), (1, 1152, 108, 108), (1, 1152, 270, 270)]
+```
+This will create a masked feature map `feature_maps` which is a list of feature maps (B * C * H * W) for each scale and each feature map contains the actual feature for the selected patches at that scaleand zero vector for the unselected patches.
 
 
 
@@ -256,7 +272,7 @@ class PS3VisionModel(PS3PreTrainedModel):
 `pool_gt_token_only`: (optional) only pool the tokens inside the gt selection regions. *It will only be used during pre-training.*
 
 
-## Pre-Training
+## Training
 
 Will be released soon.
 
