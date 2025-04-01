@@ -276,6 +276,10 @@ class PS3VisionModel(PS3PreTrainedModel):
 
 Will be released soon.
 
+## Contributing
+
+Contributions are welcome with the prerequisite that the contributor needs to agree to the [Developer Certificate of Origin](https://developercertificate.org/).
+
 ## Acknowledgements
 
 This repo is inspired a lot by the great [OpenCLIP](https://github.com/mlfoundations/open_clip), [timm](https://github.com/huggingface/pytorch-image-models), and [transformers](https://github.com/huggingface/transformers).
