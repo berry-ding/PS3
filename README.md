@@ -31,7 +31,7 @@
 <hr style="border: 2px solid gray;"></hr>
 
 ## Latest Updates
-- [2025.2.24] Initial paper release.
+- [2025.3.25] Initial paper release.
 
 
 <hr style="border: 2px solid gray;"></hr>
@@ -275,6 +275,10 @@ class PS3VisionModel(PS3PreTrainedModel):
 ## Training
 
 Will be released soon.
+
+## Contributing
+
+Contributions are welcome with the prerequisite that the contributor needs to agree to the [Developer Certificate of Origin](https://developercertificate.org/).
 
 ## Acknowledgements
 
