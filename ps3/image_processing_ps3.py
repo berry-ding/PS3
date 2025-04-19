@@ -13,11 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Any
 from PIL import Image
 
-from torchvision.transforms.v2 import InterpolationMode
-from torchvision.transforms.functional import normalize, to_tensor, resize
+from torchvision.transforms.v2 import Normalize, InterpolationMode, ToTensor, Resize
+from torchvision.transforms.v2.functional import normalize, to_tensor, resize
 
 from transformers.image_processing_utils import BaseImageProcessor
 from transformers.utils import TensorType
@@ -27,7 +27,11 @@ OPENAI_DATASET_STD = (0.26862954, 0.26130258, 0.27577711)
 
 
 def _convert_to_rgb(image):
-    return image.convert('RGB')
+    if isinstance(image, tuple):
+        return (image[0].convert('RGB'),) + image[1:]
+    else:
+        return image.convert('RGB')
+
 
 
 class PS3ImageProcessor(BaseImageProcessor):
@@ -66,13 +70,13 @@ class PS3ImageProcessor(BaseImageProcessor):
     
     def preprocess(
             self, 
-            image: Image.Image,
+            image: Any,
             return_tensors: Optional[Union[str, TensorType]] = None,
         ):
-        image = resize(image, self.image_size, interpolation=InterpolationMode.BILINEAR if self.interpolation == 'bilinear' else InterpolationMode.BICUBIC)
+        image = Resize(self.image_size, interpolation=InterpolationMode.BILINEAR if self.interpolation == 'bilinear' else InterpolationMode.BICUBIC)(image)
         image = _convert_to_rgb(image)
-        image = to_tensor(image)
-        image = normalize(image, mean=self.mean, std=self.std)
+        image = ToTensor()(image)
+        image = Normalize(mean=self.mean, std=self.std)(image)
 
         data = {"pixel_values": [image]}
         return data
