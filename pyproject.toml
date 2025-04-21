@@ -27,6 +27,9 @@ dependencies = [
     "tiktoken",
 ]
 
+[tool.setuptools]
+packages = ["ps3"]
+
 [project.urls]
 Homepage = "https://nvlabs.github.io/PS3"
 Code = "https://github.com/NVlabs/PS3"

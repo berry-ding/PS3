@@ -406,7 +406,7 @@ class PS3VisionEncoder(nn.Module):
                 select_num_each_scale[-1] += sum(self.max_select_num_each_scale) - sum(select_num_each_scale)
             for i, prob in enumerate(select_probs_flatten):
                 if (prob[0] != -1).sum() < select_num_each_scale[i]:
-                    if i < len(select_probs_flatten) - 1:# and (only_select_first_n_scale is None or i < only_select_first_n_scale - 1):
+                    if i < len(select_probs_flatten) - 1:
                         select_num_each_scale[i + 1] += select_num_each_scale[i] - (prob[0] != -1).sum()
                     select_num_each_scale[i] = (prob[0] != -1).sum()
 
@@ -423,10 +423,9 @@ class PS3VisionEncoder(nn.Module):
         return selection_maps_all_instances
 
 
-    def update_selection_maps(self, old_selection_maps, new_selection_maps, new_hidden_states):
+    def update_selection_maps(self, old_selection_maps, new_selection_maps):
         """
         old_selection_maps, new_selection_maps: list of B * H * W tensors, len(list) = num_scale - 1
-        old_hidden_states, new_hidden_states: list of B * N * C tensors, len(list) = num_layers
         """
         B = old_selection_maps[0].shape[0]
         old_selection_flatten = torch.cat([smap.reshape(B, -1) for smap in old_selection_maps], dim=-1)  # B * N
@@ -537,7 +536,7 @@ class PS3VisionEncoder(nn.Module):
                 hidden_states, _ = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, output_hidden_states=True, return_kv_cache=False)
                 hidden_states_each_step.append(hidden_states)
                 selection_maps_each_step.append(selection_maps)
-                selection_maps = self.update_selection_maps(old_selection_maps, selection_maps, hidden_states)
+                selection_maps = self.update_selection_maps(old_selection_maps, selection_maps)
 
             hidden_states = self.aggregate_features(hidden_states_each_step, selection_maps_each_step)
             low_res_hidden_states = low_res_hidden_states[-self.num_hidden_layers_to_return:]
