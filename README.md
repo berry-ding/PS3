@@ -274,7 +274,7 @@ class PS3VisionModel(PS3PreTrainedModel):
 
 ## Training
 
-Will be released soon.
+Coming later.
 
 ## Contributing
 

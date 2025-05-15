@@ -86,6 +86,7 @@ class PS3VisionEncoder(nn.Module):
         if config.class_token is not None:
             timm_kwargs['class_token'] = config.class_token
 
+        # Create the vision transformer backbone using timm
         self.trunk = timm.create_model(
             config.model_name,
             num_classes=0,
@@ -124,37 +125,42 @@ class PS3VisionEncoder(nn.Module):
         # make the timm vit to be able to interpolate pos embedding
         assert self.trunk.num_prefix_tokens == 0, "S3 currently does not support prefix tokens for timm models!"
 
-        # add the forward_tokenize and forward_after_tokenize methods
+        # Add custom forward methods to the trunk model
         self.trunk.forward_tokenize = types.MethodType(forward_tokenize, self.trunk)
         self.trunk.forward_after_tokenize = types.MethodType(forward_after_tokenize_w_kvcache, self.trunk)
         self.trunk.attn_pool.forward = types.MethodType(forward_attn_pool_with_mask, self.trunk.attn_pool)
         self.trunk._pos_embed = types.MethodType(_pos_embed, self.trunk)
         self.trunk.selected_pos_embed = types.MethodType(selected_pos_embed, self.trunk)
 
+        # Configure multi-scale processing
         self.s3_scales = config.s3_scales
         self.s3_scales.sort()
         self.s3_image_size = self.s3_scales[-1]
 
+        # Set number of hidden layers to return (for memory efficiency)
         self.num_hidden_layers_to_return = self.layers
         warnings.warn(f"The number of hidden layers to return hidden states is currently set to {self.num_hidden_layers_to_return}. If this value is large, it can consume a lot of memory. Consider setting it to a smaller value if you won't use all the hidden states from every layer!")
         self.low_res_token_num = self.trunk.low_res_token_num = (self.s3_scales[0] // self.trunk.patch_embed.patch_size[0]) ** 2
 
-        # token selection args and params
-
+        # Token selection parameters
         self.max_select_num_each_scale = config.max_select_num_each_scale
         if config.max_select_num_each_scale is None:
+            # Automatically distribute token selection budget across scales based on pixel counts
             pixels_each_scale = [s**2 for s in self.s3_scales]
             self.max_select_num_each_scale = [int(config.max_select_num * pixels_each_scale[i] / sum(pixels_each_scale[1:])) for i in range(1, len(pixels_each_scale))]
 
+        # Feature projection for token selection
         self.selection_feature_proj = Mlp(in_features=self.width * len(self.config.select_based_on_layer), hidden_features=self.width * len(self.config.select_based_on_layer), out_features=self.width * (len(self.s3_scales) - 1), norm_layer=nn.LayerNorm)
         self.prior_prompt = nn.Parameter(torch.randn(self.width))
 
+        # Optional separate positional embeddings for each scale
         if config.separate_pos_emb:
             self.pos_emb_residual = nn.ParameterList([
                 nn.Parameter(torch.zeros(1, (self.s3_scales[i] // self.trunk.patch_embed.patch_size[0]) ** 2, self.width))
                 for i in range(1, len(self.s3_scales))
             ])
         
+        # High-resolution feature extraction for token selection
         if self.config.highres_selection_feature:
             self.highres_selection_feature_module = ShallowConvNet(config)
             self.prompt_proj_for_highres = nn.Linear(self.width, config.highres_selection_module_out_dim * (len(self.s3_scales) - 1))
@@ -162,10 +168,26 @@ class PS3VisionEncoder(nn.Module):
         assert kwargs.get('patch_dropout', 0) == 0, 'S3 currently does not support patch_dropout because otherwise we will get incomplete low-res feature map!'
 
     def token_selection_param_names(self):
+        """
+        Return the names of parameters used for token selection.
+        
+        Returns:
+            list: List of parameter names involved in the token selection mechanism
+        """
         # return ["selection_feature_proj", "prior_prompt", "highres_selection_feature_module", "prompt_proj_for_highres"]
         return ["selection_feature_proj", "highres_selection_feature_module", "prompt_proj_for_highres"]
     
     def image_size_scale_i(self, x, scale_idx):
+        """
+        Calculate the image size at a specific scale index.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            scale_idx (int): Index of the scale to calculate size for
+            
+        Returns:
+            tuple: (height, width) of the image at the specified scale
+        """
         # For the lowest scale, we use square images at all times
         if scale_idx == 0:
             return (self.s3_scales[0], self.s3_scales[0])
@@ -180,132 +202,103 @@ class PS3VisionEncoder(nn.Module):
         return size
 
     def feature_size_scale_i(self, x, scale_idx):
+        """
+        Calculate the feature map size at a specific scale index for an image.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            scale_idx (int): Index of the scale to calculate feature size for
+            
+        Returns:
+            tuple: (height, width) of the feature map at the specified scale
+        """
         size = self.image_size_scale_i(x, scale_idx)
         size = (max(size[0] // self.trunk.patch_embed.patch_size[0], 1), max(size[1] // self.trunk.patch_embed.patch_size[0], 1))
         return size
 
     def max_highres_token_num(self, x, only_select_first_n_scale=None):
+        """
+        Calculate the maximum number of high-resolution tokens for an image.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            only_select_first_n_scale (int, optional): If provided, only consider the first n scales
+            
+        Returns:
+            int: Maximum number of high-resolution tokens
+        """
         feature_size_each_scale = [self.feature_size_scale_i(x, i) for i in range(1, len(self.s3_scales) if only_select_first_n_scale is None else max(only_select_first_n_scale) + 1)]
         max_token_num_each_scale = [size[0] * size[1] for size in feature_size_each_scale]
         return sum(max_token_num_each_scale)
     
     def resize_to_scale_i(self, x, scale_idx):
+        """
+        Resize the input image to a specific scale.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            scale_idx (int): Index of the scale to resize to
+            
+        Returns:
+            torch.Tensor: Resized image
+        """
         size = self.image_size_scale_i(x, scale_idx)
         return F.interpolate(x, size=size, mode='bicubic')
 
-    def forward_low_res(self, x: torch.Tensor, output_hidden_states=False, return_kv_cache=False):
-        # interpolate the image to the smallest size
-        x = self.resize_to_scale_i(x.to(torch.float32), 0).to(x.dtype)
-        x = self.trunk.forward_tokenize(x)
+    def _calculate_select_probs(self, feature_map, highres_feature_map, prompt, input):
+        """
+        Calculate selection probabilities based on feature maps and prompt.
+        
+        Args:
+            feature_map (torch.Tensor): Feature map for patch selection at each scale, with shape B * num_scale * C * H * W
+            highres_feature_map (torch.Tensor, optional): High-resolution feature map, with shape B * C * H * W
+            prompt (torch.Tensor): Prompt embedding for selection, with shape B * C
+            input (torch.Tensor): Input image tensor for size calculations
+            
+        Returns:
+            list: Selection probabilities for each scale
+        """
+        # Calculate selection logits using cosine similarity between feature map and prompt
+        select_logits = (F.normalize(feature_map, dim=2) * F.normalize(prompt, dim=-1)[..., None, None].unsqueeze(1)).sum(dim=2)  # B * num_scale * H * W
+        
+        # Incorporate high-res feature map if available for more accurate selection
+        if highres_feature_map is not None:
+            high_res_prompt = rearrange(self.prompt_proj_for_highres(prompt), "b (ns c) -> b ns c", ns=len(self.s3_scales) - 1)
+            highres_select_logits = (F.normalize(highres_feature_map, dim=1).unsqueeze(1) * F.normalize(high_res_prompt, dim=-1)[..., None, None]).sum(dim=2)  # B * num_scale * H * W
+            select_logits = (select_logits + F.adaptive_max_pool2d(highres_select_logits, select_logits.shape[-2:])) / 2
+        
+        # Apply scaling, clamping, and softmax to get probabilities
+        select_logits = select_logits * 5.0
+        select_logits = select_logits.clamp(-10, 10)
+        select_logits = F.pad(select_logits[..., None], (0, 1))
+        select_probs = F.softmax(select_logits, dim=-1)[..., 0]  # B * num_scale * H * W
+        
+        # Use the same selection probabilities for all scales
+        select_probs = select_probs * 0 + select_probs[:, :1]
+        
+        # Resize selection probabilities to match feature map sizes at each scale
+        select_probs = [F.interpolate(select_probs[:, i:i+1].float(), 
+                                      size=self.feature_size_scale_i(input, i+1), 
+                                      mode='nearest').squeeze(1).to(select_probs) 
+                        for i in range(len(self.s3_scales) - 1)]
+        
+        return select_probs
 
-        outs = self.trunk.forward_after_tokenize(x, output_hidden_states=output_hidden_states, return_kv_cache=return_kv_cache)
-        x = outs["x"]
-        if output_hidden_states:
-            hidden_states = outs["hidden_states"]
-        if return_kv_cache:
-            output_kv_cache = outs["output_kv_cache"]
-
-        if output_hidden_states and return_kv_cache:
-            return hidden_states, output_kv_cache, x
-        elif return_kv_cache:
-            return output_kv_cache, x
-        if output_hidden_states:
-            return hidden_states, x
-        else:
-            return x
-    
-    def forward_high_res(self, x: torch.Tensor, selection_maps, kv_cache=None, output_hidden_states=False, low_res_hidden_states=None, pool_gt_token_only=False, gt_selection_maps=None, return_kv_cache=False):
-        assert selection_maps[0].dim() == 3, "Each selection map must be with shape B * H * W"
-        assert len(selection_maps) == len(self.s3_scales) - 1, "Number of selection map must be the same as the number of high-res scales"
-
-        input = x
-        B = x.shape[0]
-
-        # tokenize for high-res
-        if all([torch.all(selection_maps[scale_id].flatten(1, 2).sum(dim=-1) == selection_maps[scale_id].flatten(1, 2).sum(dim=-1)[0]) for scale_id in range(len(self.s3_scales) - 1)]):
-            high_res_tokens = []
-            for scale_id, scale in enumerate(self.s3_scales[1:]):
-                # Skip if no token is selected at this scale
-                if torch.all(selection_maps[scale_id] == 0):
-                    continue
-
-                # patchify and pos embedding
-                x = self.resize_to_scale_i(input.to(torch.float32), scale_id + 1).to(input.dtype)
-
-                cur_feature_size = self.feature_size_scale_i(input, scale_id + 1)
-                x = self.trunk.forward_tokenize(x, selection_maps[scale_id], cur_feature_size[0], cur_feature_size[1])
-                if self.config.separate_pos_emb:
-                    cur_pos_emb_residual = self.pos_emb_residual[scale_id]
-                    cur_pos_emb_residual = rearrange(cur_pos_emb_residual, "1 (h w) c -> 1 c h w", h=int(cur_pos_emb_residual.shape[1]**0.5))
-                    cur_pos_emb_residual = cur_pos_emb_residual[:, :, :cur_feature_size[0], :cur_feature_size[1]]
-                    cur_pos_emb_residual = rearrange(cur_pos_emb_residual, "1 c h w -> 1 (h w) c")
-                    cur_pos_emb_residual = cur_pos_emb_residual.repeat(B, 1, 1)[selection_maps[scale_id].flatten(1, 2).bool()].view(B, -1, self.width)
-                    x = x + cur_pos_emb_residual
-
-                high_res_tokens.append(x)
-            high_res_tokens = torch.cat(high_res_tokens, dim=1)  # B * N * C
-        else:
-            high_res_tokens = []
-            original_input = input
-            original_selection_maps = selection_maps
-            for i in range(B):
-                cur_high_res_tokens = []
-                input = original_input[i:i+1]
-                selection_maps = [m[i:i+1] for m in original_selection_maps]
-                for scale_id, scale in enumerate(self.s3_scales[1:]):
-                    # Skip if no token is selected at this scale
-                    if torch.all(selection_maps[scale_id] == 0):
-                        continue
-
-                    # patchify and pos embedding
-                    x = self.resize_to_scale_i(input.to(torch.float32), scale_id + 1).to(input.dtype)
-
-                    cur_feature_size = self.feature_size_scale_i(input, scale_id + 1)
-                    x = self.trunk.forward_tokenize(x, selection_maps[scale_id], cur_feature_size[0], cur_feature_size[1])
-                    if self.config.separate_pos_emb:
-                        cur_pos_emb_residual = self.pos_emb_residual[scale_id]
-                        cur_pos_emb_residual = rearrange(cur_pos_emb_residual, "1 (h w) c -> 1 c h w", h=int(cur_pos_emb_residual.shape[1]**0.5))
-                        cur_pos_emb_residual = cur_pos_emb_residual[:, :, :cur_feature_size[0], :cur_feature_size[1]]
-                        cur_pos_emb_residual = rearrange(cur_pos_emb_residual, "1 c h w -> 1 (h w) c")
-                        cur_pos_emb_residual = cur_pos_emb_residual.repeat(1, 1, 1)[selection_maps[scale_id].flatten(1, 2).bool()].view(1, -1, self.width)
-                        x = x + cur_pos_emb_residual
-
-                    cur_high_res_tokens.append(x)
-                cur_high_res_tokens = torch.cat(cur_high_res_tokens, dim=1)  # B * N * C
-                high_res_tokens.append(cur_high_res_tokens)
-            high_res_tokens = torch.cat(high_res_tokens, dim=0)
-
-
-        # If gt_selection_maps is given, then only pool the features within the gt_selection_mask
-        if pool_gt_token_only:
-            assert gt_selection_maps is not None
-            gt_selection_maps = [F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, i+1), mode='area').squeeze(1).to(gt_selection_maps) for i in range(len(self.s3_scales) - 1)]
-            gt_selection_maps_flat = torch.cat([smap.reshape(B, -1) for smap in gt_selection_maps], dim=-1)
-            selection = torch.cat([smap.reshape(B, -1) for smap in selection_maps], dim=-1)  # B * N
-            gt_selection_mask = gt_selection_maps_flat[selection.bool()].reshape(B, -1)
-        else:
-            gt_selection_mask = None
-
-        # forward
-        outs = self.trunk.forward_after_tokenize(high_res_tokens, kv_cache=kv_cache, output_hidden_states=output_hidden_states, 
-                                                 pool_mask=gt_selection_mask, return_kv_cache=return_kv_cache)
-        x = outs["x"]
-        if output_hidden_states:
-            hidden_states = outs["hidden_states"]
-            hidden_states = hidden_states[-self.num_hidden_layers_to_return:]
-        if return_kv_cache:
-            output_kv_cache = outs["output_kv_cache"]
-
-        if output_hidden_states and return_kv_cache:
-            return hidden_states, output_kv_cache, x
-        elif return_kv_cache:
-            return output_kv_cache, x
-        if output_hidden_states:
-            return hidden_states, x
-        else:
-            return x
-    
-    def get_selection_probs(self, input: torch.Tensor, feature_map: torch.Tensor, highres_feature_map=None, prompt=None, gt_selection_maps=None, is_global_text=None, smooth_selection_prob=False):
+    def get_selection_probs(self, input: torch.Tensor, feature_map: torch.Tensor, highres_feature_map=None, prompt=None, gt_selection_maps=None, smooth_selection_prob=False):
+        """
+        Calculate the probability of selecting each token for high-resolution processing.
+        
+        Args:
+            input (torch.Tensor): Input image tensor
+            feature_map (torch.Tensor): Feature map from low-resolution processing for patch selection
+            highres_feature_map (torch.Tensor, optional): High-resolution feature map for patch selection
+            prompt (torch.Tensor, optional): prompt embedding for top-down selection
+            gt_selection_maps (torch.Tensor, optional): Ground truth selection maps
+            smooth_selection_prob (bool): Whether to smooth the selection probabilities
+            
+        Returns:
+            tuple: (selection probabilities, prior selection probabilities, posterior selection probabilities)
+        """
         assert feature_map.dim() == 4, "Feature map must be with shape B * C * H * W"
         if prompt is not None:
             assert prompt.dim() == 2, "Prompt must be with shape B * C"
@@ -325,31 +318,22 @@ class PS3VisionEncoder(nn.Module):
         feature_map = self.selection_feature_proj(feature_map.permute(0, 2, 3, 1))  # B * H * W * (num_scale * C)
         feature_map = rearrange(feature_map, "b h w (ns c) -> b ns c h w", ns=len(self.s3_scales) - 1)
         
-        
-        prior_select_logits = (F.normalize(feature_map, dim=2) * F.normalize(self.prior_prompt, dim=-1)[None, None, ..., None, None]).sum(dim=2)  # B * num_scale * H * W
-        if highres_feature_map is not None:
-            high_res_prompt = rearrange(self.prompt_proj_for_highres(self.prior_prompt), "(ns c) -> ns c", ns=len(self.s3_scales) - 1)
-            highres_prior_select_logits = (F.normalize(highres_feature_map, dim=1).unsqueeze(1) * F.normalize(high_res_prompt, dim=-1)[None, ..., None, None]).sum(dim=2)  # B * num_scale * H * W
-            prior_select_logits = (prior_select_logits + F.adaptive_max_pool2d(highres_prior_select_logits, prior_select_logits.shape[-2:])) / 2   # pooling high-res logits into smaller size so that when selecting high-res tokens, the adjacent 4 tokens will be selected together
-        prior_select_logits = prior_select_logits * 5.0
-        prior_select_logits = prior_select_logits.clamp(-10, 10)
-        prior_select_logits = F.pad(prior_select_logits[..., None], (0, 1))
-        prior_select_probs = F.softmax(prior_select_logits, dim=-1)[..., 0]  # B * num_scale * H * W
-        prior_select_probs = prior_select_probs * 0 + prior_select_probs[:, :1]  # Use the same select probs for all scales
-        prior_select_probs = [F.interpolate(prior_select_probs[:, i:i+1].float(), size=self.feature_size_scale_i(input, i+1), mode='nearest').squeeze(1).to(prior_select_probs) for i in range(len(self.s3_scales) - 1)]  # resize select_probs to the same size as the feature map of each scale
+        # Calculate prior selection probabilities
+        prior_select_probs = self._calculate_select_probs(
+            feature_map, 
+            highres_feature_map, 
+            self.prior_prompt[None].repeat(B, 1), 
+            input
+        )
 
+        # Calculate posterior selection probabilities if prompt is provided
         if not select_with_prior:
-            posterior_select_logits = (F.normalize(feature_map, dim=2) * F.normalize(prompt, dim=1)[..., None, None].unsqueeze(1)).sum(dim=2)  # B * num_scale * H * W
-            if highres_feature_map is not None:
-                high_res_prompt = rearrange(self.prompt_proj_for_highres(prompt), "b (ns c) -> b ns c", ns=len(self.s3_scales) - 1)
-                highres_posterior_select_logits = (F.normalize(highres_feature_map, dim=1).unsqueeze(1) * F.normalize(high_res_prompt, dim=-1)[..., None, None]).sum(dim=2)  # B * num_scale * H * W
-                posterior_select_logits = (posterior_select_logits + F.adaptive_max_pool2d(highres_posterior_select_logits, posterior_select_logits.shape[-2:])) / 2   # pooling high-res logits into smaller size so that when selecting high-res tokens, the adjacent 4 tokens will be selected together
-            posterior_select_logits = posterior_select_logits * 5.0
-            posterior_select_logits = posterior_select_logits.clamp(-10, 10)
-            posterior_select_logits = F.pad(posterior_select_logits[..., None], (0, 1))
-            posterior_select_probs = F.softmax(posterior_select_logits, dim=-1)[..., 0]  # B * num_scale * H * W
-            posterior_select_probs = posterior_select_probs * 0 + posterior_select_probs[:, :1]  # Use the same select probs for all scales
-            posterior_select_probs = [F.interpolate(posterior_select_probs[:, i:i+1].float(), size=self.feature_size_scale_i(input, i+1), mode='nearest').squeeze(1).to(posterior_select_probs) for i in range(len(self.s3_scales) - 1)]  # resize select_probs to the same size as the feature map of each scale
+            posterior_select_probs = self._calculate_select_probs(
+                feature_map,
+                highres_feature_map,
+                prompt,
+                input
+            )
         else:
             posterior_select_probs = None
 
@@ -365,10 +349,6 @@ class PS3VisionEncoder(nn.Module):
         if select_with_gt:
             select_probs = [(gt_prob > 0) * 1 + (gt_prob <= 0) * prob for gt_prob, prob in zip(gt_selection_maps, select_probs)]
 
-        # For samples with global caption, use prior selection probs for high-res token selection
-        if is_global_text is not None:
-            select_probs = [is_global_text.view(-1, 1, 1) * prior_select_probs[i] + is_global_text.view(-1, 1, 1).logical_not() * select_probs[i] for i in range(len(self.s3_scales) - 1)]
-        
         # smoothing the selection probs
         if smooth_selection_prob:
             select_probs = [F.interpolate(F.interpolate(x.unsqueeze(1), size=(6, 6), mode='area'), size=x.shape[-2:], mode='nearest').squeeze(1) for x in select_probs]
@@ -377,6 +357,18 @@ class PS3VisionEncoder(nn.Module):
 
     @torch.no_grad()
     def get_selection_maps(self, select_probs, old_selection_maps=None, num_select_token=None, only_select_first_n_scale=None):
+        """
+        Convert selection probabilities to binary selection maps.
+        
+        Args:
+            select_probs (list): List of tensors with selection probabilities
+            old_selection_maps (list, optional): The map of previously selected patches. We only select patches that haven't been selected before.
+            num_select_token (int, optional): Number of tokens to select
+            only_select_first_n_scale (list, optional): Only select from first n scales
+            
+        Returns:
+            list: Binary selection maps for each scale
+        """
         B = select_probs[0].shape[0]
 
         select_probs_all_instances = select_probs
@@ -425,15 +417,34 @@ class PS3VisionEncoder(nn.Module):
 
     def update_selection_maps(self, old_selection_maps, new_selection_maps):
         """
-        old_selection_maps, new_selection_maps: list of B * H * W tensors, len(list) = num_scale - 1
+        Combine old and new selection maps for progressive token selection.
+        
+        This function merges previously selection maps with the new ones,
+        ensuring there's no overlap between them. This is used during iterative
+        high-resolution processing to accumulate selected regions across iterations.
+        
+        Args:
+            old_selection_maps (list): Previously selected tokens as binary masks
+                                      for each scale. Each mask has shape B x H x W.
+            new_selection_maps (list): Newly selected tokens as binary masks
+                                      for each scale. Each mask has shape B x H x W.
+            
+        Returns:
+            list: Updated selection maps combining old and new selections
+                 without overlap, maintaining the same format as inputs.
         """
         B = old_selection_maps[0].shape[0]
+        # Flatten selection maps for easier processing
         old_selection_flatten = torch.cat([smap.reshape(B, -1) for smap in old_selection_maps], dim=-1)  # B * N
         new_selection_flatten = torch.cat([smap.reshape(B, -1) for smap in new_selection_maps], dim=-1)  # B * N
+        
+        # Verify that old and new selections don't overlap
         assert torch.all(old_selection_flatten.bool() * new_selection_flatten.bool() == False), f"Old and new selection maps must be exclusive, but now {(old_selection_flatten * new_selection_flatten == 0).sum()}"
             
+        # Combine old and new selections
         selection_flatten = old_selection_flatten + new_selection_flatten
 
+        # Reshape back to original format
         updated_selection_maps = list(torch.split(selection_flatten, [smap.shape[1] * smap.shape[2] for smap in old_selection_maps], dim=-1))
         updated_selection_maps = [rearrange(mp, 'b (h w) -> b h w', h=old_smap.shape[-2]) for mp, old_smap in zip(updated_selection_maps, old_selection_maps)]  # list of B * H * W
 
@@ -441,18 +452,35 @@ class PS3VisionEncoder(nn.Module):
 
     def aggregate_features(self, features_each_step, selection_maps_each_step):
         """
-        selection_maps_each_step: list of lists, len(list) = num_step, each list in the list is a list of B * H * W tensors, len(list) = num_scale - 1
-        features_each_step: list of lists, len(list) = num_step, each list in the list is a list of B * N * C tensors, len(list) = num_layers
+        Aggregate features from multiple selection steps into a unified feature set.
+        
+        This function combines features from different high-resolution processing iterations
+        into a single coherent set of features. It ensures that features from each step
+        are placed in their correct positions according to the selection maps.
+        
+        Args:
+            features_each_step (list[list[torch.Tensor]]): Features from each selection step. list of lists, len(list) = num_step, each list in the list is a list of B * N * C tensors, len(list) = num_layers
+            selection_maps_each_step (list[list[torch.Tensor]]): Selection maps from each step. list of lists, len(list) = num_step, each list in the list is a list of B * H * W tensors, len(list) = num_scale - 1
+            
+        Returns:
+            list: Aggregated features for each layer, where each tensor has shape B x N_total x C,
+                 with N_total being the total number of selected tokens across all steps.
         """
         B = selection_maps_each_step[0][0].shape[0]
         C = features_each_step[0][0].shape[-1]
+        
+        # Flatten selection maps for each step
         selection_flatten_each_step = [torch.cat([smap.reshape(B, -1) for smap in selection_maps], dim=-1) for selection_maps in selection_maps_each_step]  # B * N
             
+        # Initialize empty feature tensors for each layer
         features_flatten = [torch.zeros(B, selection_flatten_each_step[0].shape[1], C, device=selection_flatten_each_step[0].device, dtype=selection_flatten_each_step[0].dtype) for _ in features_each_step[0]]
+        
+        # Fill in features from each step at their corresponding positions
         for layer_id in range(len(features_flatten)):
             for step_id in range(len(features_each_step)):
                 features_flatten[layer_id][selection_flatten_each_step[step_id].bool()] = features_each_step[step_id][layer_id].flatten(0, 1)
         
+        # Create the final aggregated features by selecting only the positions that have been filled
         agg_selection_flatten = sum(selection_flatten_each_step)
         agg_features = [features[agg_selection_flatten.bool()].reshape(B, -1, C) for features in features_flatten]
 
@@ -460,8 +488,14 @@ class PS3VisionEncoder(nn.Module):
 
     def format_features_into_feature_maps(self, features, selection_maps):
         """
-        features: B * N * C tensor containing both low-res and high-res features
-        selection_maps: list of B * H * W tensors, len(list) = num_scale - 1. Each tensor is a binary mask.
+        Format token features back into spatial feature maps.
+        
+        Args:
+            features (torch.Tensor): Token features (B x N x C) containing both low-res and high-res features
+            selection_maps (list): Selection maps indicating token positions. list of B * H * W tensors, len(list) = num_scale - 1. Each tensor is a binary mask.
+            
+        Returns:
+            list: Feature maps for each scale
         """
         B, _, C = features.shape
         high_res_selection_num = sum([x.sum(dim=(-1, -2)) for x in selection_maps])
@@ -487,17 +521,167 @@ class PS3VisionEncoder(nn.Module):
 
         return full_feature_maps
 
+    def forward_low_res(self, x: torch.Tensor, output_hidden_states=False, return_kv_cache=False):
+        """
+        Process the input image at the lowest resolution.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            output_hidden_states (bool): Whether to return hidden states from all layers
+            return_kv_cache (bool): Whether to return key-value cache for later use
+            
+        Returns:
+            dict:
+                - x: low-res features
+                - hidden_states: hidden states from all layers
+                - output_kv_cache: low-res key-value cache
+        """
+        # Resize the image to the smallest scale and process it
+        x = self.resize_to_scale_i(x.to(torch.float32), 0).to(x.dtype)
+        x = self.trunk.forward_tokenize(x)
+
+        # Forward pass through the transformer backbone
+        outs = self.trunk.forward_after_tokenize(x, output_hidden_states=output_hidden_states, return_kv_cache=return_kv_cache)
+        return outs
+    
+    def tokenize_high_res(self, input, selection_maps):
+        """
+        Tokenize high-resolution patches based on selection maps.
+        
+        This function processes the input image at multiple high-resolution scales,
+        but only for the patches indicated by the selection maps. It applies
+        appropriate resizing, tokenization, and positional embedding for each scale.
+        
+        Args:
+            input (torch.Tensor): Input image tensor with shape B x C x H x W
+            selection_maps (list): List of binary masks indicating which patches to process
+                                  at each scale. Each mask has shape B x H x W where 1 indicates
+                                  the patch is selected and 0 indicates not selected.
+            
+        Returns:
+            torch.Tensor: High-resolution tokens with shape B x N x C, where N is the
+                         total number of selected high-resolution patches across all scales.
+        """
+        B = input.shape[0]
+        high_res_tokens = []
+        for scale_id, scale in enumerate(self.s3_scales[1:]):
+            # Skip if no token is selected at this scale
+            if torch.all(selection_maps[scale_id] == 0):
+                continue
+
+            # Resize image to current scale
+            x = self.resize_to_scale_i(input.to(torch.float32), scale_id + 1).to(input.dtype)
+
+            # Calculate feature size and tokenize only selected patches
+            cur_feature_size = self.feature_size_scale_i(input, scale_id + 1)
+            x = self.trunk.forward_tokenize(x, selection_maps[scale_id], cur_feature_size[0], cur_feature_size[1])
+            
+            # Apply scale-specific positional embedding if configured
+            if self.config.separate_pos_emb:
+                cur_pos_emb_residual = self.pos_emb_residual[scale_id]
+                cur_pos_emb_residual = rearrange(cur_pos_emb_residual, "1 (h w) c -> 1 c h w", h=int(cur_pos_emb_residual.shape[1]**0.5))
+                cur_pos_emb_residual = cur_pos_emb_residual[:, :, :cur_feature_size[0], :cur_feature_size[1]]
+                cur_pos_emb_residual = rearrange(cur_pos_emb_residual, "1 c h w -> 1 (h w) c")
+                cur_pos_emb_residual = cur_pos_emb_residual.repeat(B, 1, 1)[selection_maps[scale_id].flatten(1, 2).bool()].view(B, -1, self.width)
+                x = x + cur_pos_emb_residual
+
+            high_res_tokens.append(x)
+        
+        # Combine tokens from all scales
+        high_res_tokens = torch.cat(high_res_tokens, dim=1)  # B * N * C
+
+        return high_res_tokens
+    
+    def forward_high_res(self, x: torch.Tensor, selection_maps, kv_cache=None, output_hidden_states=False, pool_gt_token_only=False, gt_selection_maps=None, return_kv_cache=False):
+        """
+        Process the input image at high resolution and only at selected regions.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            selection_maps (list[torch.Tensor]): List of binary masks indicating which patches to process. Each mask is with shape B * H * W. 1 indicates the patch is selected and 0 indicates not selected.
+            kv_cache (torch.Tensor, optional): Key-value cache from low-resolution processing
+            output_hidden_states (bool): Whether to return hidden states from all layers
+            pool_gt_token_only (bool): Whether to pool only tokens specified by ground truth selection maps
+            gt_selection_maps (torch.Tensor, optional): Ground truth selection maps
+            return_kv_cache (bool): Whether to return key-value cache
+            
+        Returns:
+            Various combinations of hidden states, KV cache, and output features depending on arguments
+        """
+        assert selection_maps[0].dim() == 3, "Each selection map must be with shape B * H * W"
+        assert len(selection_maps) == len(self.s3_scales) - 1, "Number of selection map must be the same as the number of high-res scales"
+
+        input = x
+        B = x.shape[0]
+
+        # tokenize for high-res
+        # If every sample in the batch has the same number of selected patches, then we can batchify the tokenization process
+        if all([torch.all(selection_maps[scale_id].flatten(1, 2).sum(dim=-1) == selection_maps[scale_id].flatten(1, 2).sum(dim=-1)[0]) for scale_id in range(len(self.s3_scales) - 1)]):
+            high_res_tokens = self.tokenize_high_res(input, selection_maps)
+        
+        # If different samples have different number of selected patches, then we need to process each sample individually
+        else:
+            high_res_tokens = []
+            original_input = input
+            original_selection_maps = selection_maps
+            for i in range(B):
+                input = original_input[i:i+1]
+                selection_maps = [m[i:i+1] for m in original_selection_maps]
+                cur_high_res_tokens = self.tokenize_high_res(input, selection_maps)
+                high_res_tokens.append(cur_high_res_tokens)
+            high_res_tokens = torch.cat(high_res_tokens, dim=0)
+
+        # If gt_selection_maps is given, then only pool the features within the gt_selection_mask
+        if pool_gt_token_only:
+            assert gt_selection_maps is not None
+            gt_selection_maps = [F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, i+1), mode='area').squeeze(1).to(gt_selection_maps) for i in range(len(self.s3_scales) - 1)]
+            gt_selection_maps_flat = torch.cat([smap.reshape(B, -1) for smap in gt_selection_maps], dim=-1)
+            selection = torch.cat([smap.reshape(B, -1) for smap in selection_maps], dim=-1)  # B * N
+            gt_selection_mask = gt_selection_maps_flat[selection.bool()].reshape(B, -1)
+        else:
+            gt_selection_mask = None
+
+        # forward
+        outs = self.trunk.forward_after_tokenize(high_res_tokens, kv_cache=kv_cache, output_hidden_states=output_hidden_states, 
+                                                 pool_mask=gt_selection_mask, return_kv_cache=return_kv_cache)
+        if output_hidden_states:
+            outs["hidden_states"] = outs["hidden_states"][-self.num_hidden_layers_to_return:]
+
+        return outs
 
     def forward(self, x: torch.Tensor, prompt=None, gt_selection_maps=None, is_global_text=None, output_hidden_states=False, pool_gt_token_only=False, num_look_close=None, num_token_look_close=None, smooth_selection_prob=False, only_select_first_n_scale=None):
-
+        """
+        Forward pass of the PS3 Vision Encoder.
+        
+        The model first processes the image at low resolution, then selectively processes
+        regions at higher resolutions based on selection probabilities.
+        
+        Args:
+            x (torch.Tensor): Input image tensor
+            prompt (torch.Tensor, optional): Prompt embedding for top-down selection
+            gt_selection_maps (torch.Tensor, optional): Ground truth selection maps
+            is_global_text (torch.Tensor, optional): Boolean tensor indicating if text is global
+            output_hidden_states (bool): Whether to return hidden states from all layers
+            pool_gt_token_only (bool): Whether to pool only tokens specified by ground truth
+            num_look_close (int, optional): Number of iterations for high-res processing
+            num_token_look_close (int, optional): Number of tokens to process in high-res
+            smooth_selection_prob (bool): Whether to smooth the selection probabilities
+            only_select_first_n_scale (list, optional): Only select from first n scales
+            
+        Returns:
+            PS3VisionModelOutput: Model outputs including features, selection maps, etc.
+        """
         # get low-res features
-        low_res_hidden_states, low_res_kv_cache, low_res_pooled = self.forward_low_res(x, output_hidden_states=True, return_kv_cache=True)
+        low_res_outs = self.forward_low_res(x, output_hidden_states=True, return_kv_cache=True)
+        low_res_hidden_states, low_res_kv_cache, low_res_pooled = low_res_outs["hidden_states"], low_res_outs["output_kv_cache"], low_res_outs["x"]
+        
+        # Extract features for token selection from specified layers
         selection_features = torch.cat([low_res_hidden_states[i] for i in self.config.select_based_on_layer], dim=-1)
 
-        # get token selection and weights based on the prompt
+        # Calculate selection probabilities for high-resolution processing
         selection_features = rearrange(selection_features, "b (h w) c -> b c h w", h=self.feature_size_scale_i(x, 0)[0])
         highres_selection_features = self.highres_selection_feature_module(F.interpolate(x.to(torch.float32), size=1512, mode='bicubic').to(x.dtype)) if self.config.highres_selection_feature else None
-        select_probs, prior_select_probs, posterior_select_probs = self.get_selection_probs(x, selection_features, highres_selection_features, prompt, gt_selection_maps, is_global_text, smooth_selection_prob=smooth_selection_prob)
+        select_probs, prior_select_probs, posterior_select_probs = self.get_selection_probs(x, selection_features, highres_selection_features, prompt, gt_selection_maps, smooth_selection_prob=smooth_selection_prob)
 
         # process high-res
         if output_hidden_states:
@@ -509,6 +693,7 @@ class PS3VisionEncoder(nn.Module):
                     selection_probs=select_probs
                 )
 
+            # Determine how many high-resolution iterations to perform
             if num_look_close == "all" or num_token_look_close == 'all':  # Process all the high-res patches
                 num_look_close = math.ceil(self.max_highres_token_num(x, only_select_first_n_scale) / sum(self.max_select_num_each_scale))
             elif num_look_close is not None and num_look_close > 0:  # Run the high-res selection and encoding for num_look_close times
@@ -521,23 +706,28 @@ class PS3VisionEncoder(nn.Module):
             else:
                 raise ValueError(f"Invalid config: num_look_close={num_look_close}, num_token_look_close={num_token_look_close}")
 
+            # First iteration of high-resolution processing
             selection_maps = self.get_selection_maps(select_probs, 
                                                      num_select_token=num_token_look_close if num_token_look_close is not None and num_token_look_close <= sum(self.max_select_num_each_scale) else None,
                                                      only_select_first_n_scale=only_select_first_n_scale)
-            hidden_states, _ = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, output_hidden_states=True, return_kv_cache=False)
+            hidden_states = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, output_hidden_states=True, return_kv_cache=False)["hidden_states"]
             
+            # Store results from first iteration
             hidden_states_each_step = [hidden_states]
             selection_maps_each_step = [selection_maps]
+            
+            # Additional iterations of high-resolution processing
             for k in range(num_look_close - 1):
                 old_selection_maps = selection_maps
                 selection_maps = self.get_selection_maps(select_probs, 
                                                          old_selection_maps=old_selection_maps, num_select_token=num_token_look_close_last_iter if num_token_look_close is not None and k == num_look_close - 2 else None,
                                                          only_select_first_n_scale=only_select_first_n_scale)
-                hidden_states, _ = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, output_hidden_states=True, return_kv_cache=False)
+                hidden_states = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, output_hidden_states=True, return_kv_cache=False)["hidden_states"]
                 hidden_states_each_step.append(hidden_states)
                 selection_maps_each_step.append(selection_maps)
                 selection_maps = self.update_selection_maps(old_selection_maps, selection_maps)
 
+            # Aggregate features from all iterations
             hidden_states = self.aggregate_features(hidden_states_each_step, selection_maps_each_step)
             low_res_hidden_states = low_res_hidden_states[-self.num_hidden_layers_to_return:]
             hidden_states = [torch.cat([low_res_x, x], dim=1) for low_res_x, x in zip(low_res_hidden_states, hidden_states)]  # Since when using kv cache, the forward function only returns the high-res hidden states, we need to manually concatenate it with the low-res hidden states
@@ -550,20 +740,21 @@ class PS3VisionEncoder(nn.Module):
                 selection_probs=select_probs
             )
         
-        selection_maps = self.get_selection_maps(select_probs, num_select_token=num_token_look_close if num_token_look_close is not None and num_token_look_close <= sum(self.max_select_num_each_scale) else None)
-        pooled = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, low_res_hidden_states=low_res_hidden_states, pool_gt_token_only=pool_gt_token_only, gt_selection_maps=gt_selection_maps)
+        else:
+            selection_maps = self.get_selection_maps(select_probs, num_select_token=num_token_look_close if num_token_look_close is not None and num_token_look_close <= sum(self.max_select_num_each_scale) else None)
+            pooled = self.forward_high_res(x, selection_maps, kv_cache=low_res_kv_cache, pool_gt_token_only=pool_gt_token_only, gt_selection_maps=gt_selection_maps)["x"]
 
-        # For samples with global text, replace the pooled high-res feature with the pooled low-res feature
-        if is_global_text is not None:
-            pooled = is_global_text * low_res_pooled + is_global_text.logical_not() * pooled
+            # For samples with global text, replace the pooled high-res feature with the pooled low-res feature
+            if is_global_text is not None:
+                pooled = is_global_text * low_res_pooled + is_global_text.logical_not() * pooled
 
-        return PS3VisionModelOutput(
-            pooled_output=pooled,
-            selection_maps=selection_maps,
-            selection_probs=select_probs,
-            prior_selection_probs=prior_select_probs,
-            posterior_selection_probs=posterior_select_probs
-        )
+            return PS3VisionModelOutput(
+                pooled_output=pooled,
+                selection_maps=selection_maps,
+                selection_probs=select_probs,
+                prior_selection_probs=prior_select_probs,
+                posterior_selection_probs=posterior_select_probs
+            )
 
 
 
