@@ -47,7 +47,7 @@
 
 Install through pip to use PS3 out of the box.
 ```bash
-pip install ps3
+pip install ps3-torch
 ```
 
 If you would like to make changes to the PS3 code, clone this repo and install in editable mode.
