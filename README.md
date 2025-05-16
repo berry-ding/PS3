@@ -73,8 +73,8 @@ from PIL import Image
 from ps3 import PS3VisionModel, PS3ImageProcessor
 
 # Load the PS3 model and processor.
-vision_model = PS3VisionModel.from_pretrained("NVlabs/PS3-4k-vit-b-16")
-processor = PS3ImageProcessor.from_pretrained("NVlabs/PS3-4k-vit-b-16")
+vision_model = PS3VisionModel.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
+processor = PS3ImageProcessor.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
 vision_model.cuda().eval()
 
 # You can replace it with your own image.
@@ -181,8 +181,8 @@ First of all, load the text model and encode the text prompt.
 ```python
 from ps3 import PS3Tokenizer, PS3TextModel
 
-tokenizer = PS3Tokenizer.from_pretrained("NVlabs/PS3-4k-vit-b-16")
-text_model = PS3TextModel.from_pretrained("NVlabs/PS3-4k-vit-b-16")
+tokenizer = PS3Tokenizer.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
+text_model = PS3TextModel.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
 text_model.cuda().eval()
 
 text = ["A tall spire with a cross at the top of the building."]

@@ -5,4 +5,6 @@ output
 **__pycache__**
 **egg-info**
 
+MODEL_CARD_for_PS3.md
+
 **radio_adapter_mlp**
