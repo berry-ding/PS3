@@ -2,19 +2,20 @@
 
 # Scaling Vision Pre-Training to 4K Resolution
 
-[![website](https://img.shields.io/badge/website-76b900?style=for-the-badge&logo=safari&labelColor=555555)](https://nvlabs.github.io/PS3)
-[![Arxiv](https://img.shields.io/badge/Arxiv-b31b1b?style=for-the-badge&logo=arxiv&labelColor=555555)]()
-[![PS3 Models](https://img.shields.io/badge/PS3%20Models%20(Coming%20soon)-ffd21e?style=for-the-badge&logo=huggingface&labelColor=555555)]()
-[![VILA-HD Models](https://img.shields.io/badge/VILA--HD%20Models%20(Coming%20soon)-ffd21e?style=for-the-badge&logo=huggingface&labelColor=555555)]()
-[![VILA-HD Code](https://img.shields.io/badge/VILA--HD%20Code%20(Coming%20soon)-181717?style=for-the-badge&logo=github&labelColor=555555)]()
+[![website](https://img.shields.io/badge/website-76b900?style=for-the-badge&logo=safari&labelColor=555555)](https://nvlabs.github.io/PS3/)
+[![Arxiv](https://img.shields.io/badge/Arxiv-b31b1b?style=for-the-badge&logo=arxiv&labelColor=555555)](https://arxiv.org/abs/2503.19903)
+[![VILA-HD Demo](https://img.shields.io/badge/-VILA--HD_Demo-brightgreen?style=for-the-badge&logo=huggingface&labelColor=555555&color=ff6e00)](https://huggingface.co/spaces/bfshi/VILA-HD-demo)
+[![PS3 Models](https://img.shields.io/badge/PS3%20Models%20-ffd21e?style=for-the-badge&logo=huggingface&labelColor=555555)](https://huggingface.co/collections/nvidia/ps3-scaling-vision-pre-training-to-4k-resolution-682d0535b61c07afd45242e9)
+[![VILA-HD Models](https://img.shields.io/badge/VILA--HD%20Models%20-ffd21e?style=for-the-badge&logo=huggingface&labelColor=555555)](https://huggingface.co/collections/nvidia/ps3-scaling-vision-pre-training-to-4k-resolution-682d0535b61c07afd45242e9)
+[![VILA-HD Code](https://img.shields.io/badge/VILA--HD%20Code%20-181717?style=for-the-badge&logo=github&labelColor=555555)](https://github.com/NVlabs/VILA/tree/main/vila_hd)
 
 <div style="font-family: charter;">
   <a href="https://bfshi.github.io" target="_blank" style="color: #6f6f6f; text-decoration: none;">Baifeng Shi</a><sup style="font-size: 0.6em;">1,2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://sites.google.com/site/boyilics/home" target="_blank" style="color: #6f6f6f; text-decoration: none;">Boyi Li</a><sup style="font-size: 0.6em;">1,2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://han-cai.github.io/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Han Cai</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
-  <a href="https://scholar.google.com/cit+ations?user=OI7zFmwAAAAJ&hl=en/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Yao Lu</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
+  <a href="https://scholar.google.com/citations?user=OI7zFmwAAAAJ&hl=en/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Yao Lu</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://sifeiliu.net/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Sifei Liu</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
-  <a href="https://research.nvidia.com/person/marco-pavone" target="blank" style="color: #6f6f6f; text-decoration: none;">Marco Pavone</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
+  <a href="https://research.nvidia.com/person/marco-pavone" target="blank" style="color: #6f6f6f; text-decoration: none;">Marco Pavone</a><sup style="font-size: 0.6em;">2</sup>
   <br>
   <a href="https://jankautz.com/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Jan Kautz</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
   <a href="https://hanlab.mit.edu/songhan/" target="_blank" style="color: #6f6f6f; text-decoration: none;">Song Han</a><sup style="font-size: 0.6em;">2</sup>&nbsp;&nbsp;&nbsp;
@@ -31,7 +32,11 @@
 <hr style="border: 2px solid gray;"></hr>
 
 ## Latest Updates
-- [2025.3.25] Initial paper release.
+- [2025.5.21] Models & code of PS3 and VILA-HD are released! We released two PS3 models (`PS3-1.5K-SigLIP` and `PS3-4K-SigLIP`) and two VILA-HD models (`VILA-HD-1.5K-8B-SigLIP` and `VILA-HD-4K-8B-SigLIP`).
+- [2025.4.22] Demo of VILA-HD is released! Welcome to give it a try. We are actively improving the model so any feedback is welcome!
+- [2025.4.4] Selected as conference highlight at CVPR 2025. See you in Nashville!
+- [2025.3.24] Initial paper release. Code and weights of PS3 and VILA-HD will be released very soon!
+
 
 
 <hr style="border: 2px solid gray;"></hr>
@@ -39,6 +44,44 @@
 
 ## Pre-Trained Models
 
+### PS3 models
+
+| Vision Model    | Max Resolution | Pre-Trained Weights                                                     |
+|-----------------|----------------|-------------------------------------------------------------------------|
+| PS3-1.5K-SigLIP | 1512 * 1512    | [nvidia/PS3-1.5K-SigLIP](https://huggingface.co/nvidia/PS3-1.5K-SigLIP) |
+| PS3-4K-SigLIP   | 3780 * 3780    | [nvidia/PS3-4K-SigLIP](https://huggingface.co/nvidia/PS3-4K-SigLIP)     |
+
+### VILA-HD models
+
+To use VILA-HD models, please refer to [VILA-HD repo](https://github.com/NVlabs/VILA/tree/main/vila_hd).
+
+| Vision Model    | Max Resolution | Pre-Trained Weights                                                     |
+|-----------------|----------------|-------------------------------------------------------------------------|
+| VILA-HD-8B-PS3-1.5K-SigLIP | 1512 * 1512    | [nvidia/VILA-HD-8B-PS3-1.5K-SigLIP](https://huggingface.co/nvidia/VILA-HD-8B-PS3-1.5K-SigLIP) |
+| VILA-HD-8B-PS3-4K-SigLIP   | 3780 * 3780    | [nvidia/VILA-HD-8B-PS3-4K-SigLIP](https://huggingface.co/nvidia/VILA-HD-8B-PS3-4K-SigLIP)     |
+
+<hr style="border: 2px solid gray;"></hr>
+
+## Performance
+
+### Performance of PS3 models 
+
+See Table 1 in the paper for full results.
+
+| Vision Model        | Pre-Trained Weights                                                     | Max Resolution | # High-Res Token | TextVQA | ChartQA | DocVQA | InfoVQA | OCRBench | V*Bench | RealWorldQA | Avg  |
+|---------------------|-------------------------------------------------------------------------|----------------|------------------|---------|---------|--------|---------|----------|---------|-------------|------|
+| SigLIP              |                                                                         | 378            | 0                | 62.3    | 56.6    | 51.9   | 30.7    | 387      | 51.8    | 57.1        | 49.9 |
+| SigLIP + AnyRes     |                                                                         | 1512           | 3136             | 67.4    | 58.4    | 67.9   | 34.1    | 468      | 60.2    | 59.0        | 56.3 |
+| SigLIP + S2         |                                                                         | 1512           | 2916             | 66.1    | 71.0    | 78.3   | 41.1    | 526      | 55.2    | 61.0        | 60.8 |
+| **PS3-1.5K-SigLIP** | [nvidia/PS3-1.5K-SigLIP](https://huggingface.co/nvidia/PS3-1.5K-SigLIP) | 1512           | 3645             | 69.3    | 71.1    | 79.4   | 41.3    | 534      | 64.0    | 63.8        | 63.2 |
+| SigLIP + AnyRes     |                                                                         | 3780           | 19600            | OOM     | OOM     | OOM    | OOM     | OOM      | OOM     | OOM         | OOM  |
+| SigLIP + S2         |                                                                         | 3780           | 18225            | OOM     | OOM     | OOM    | OOM     | OOM      | OOM     | OOM         | OOM  |
+| **PS3-4K-SigLIP**   | [nvidia/PS3-4K-SigLIP](https://huggingface.co/nvidia/PS3-4K-SigLIP)     | 3780           | 3840             | 69.8    | 70.9    | 79.1   | 40.5    | 543      | 67.8    | 64.7        | 63.9 |
+
+
+### Performance of VILA-HD models
+
+Please refer to [VILA-HD repo](https://github.com/NVlabs/VILA/tree/main/vila_hd).
 
 <hr style="border: 2px solid gray;"></hr>
 
@@ -73,8 +116,8 @@ from PIL import Image
 from ps3 import PS3VisionModel, PS3ImageProcessor
 
 # Load the PS3 model and processor.
-vision_model = PS3VisionModel.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
-processor = PS3ImageProcessor.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
+vision_model = PS3VisionModel.from_pretrained("nvidia/PS3-4K-SigLIP")
+processor = PS3ImageProcessor.from_pretrained("nvidia/PS3-4K-SigLIP")
 vision_model.cuda().eval()
 
 # You can replace it with your own image.
@@ -181,8 +224,8 @@ First of all, load the text model and encode the text prompt.
 ```python
 from ps3 import PS3Tokenizer, PS3TextModel
 
-tokenizer = PS3Tokenizer.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
-text_model = PS3TextModel.from_pretrained("Efficient-Large-Model/PS3-4K-SigLIP")
+tokenizer = PS3Tokenizer.from_pretrained("nvidia/PS3-4K-SigLIP")
+text_model = PS3TextModel.from_pretrained("nvidia/PS3-4K-SigLIP")
 text_model.cuda().eval()
 
 text = ["A tall spire with a cross at the top of the building."]
@@ -274,7 +317,11 @@ class PS3VisionModel(PS3PreTrainedModel):
 
 ## Training
 
-Coming later.
+Coming soon.
+
+## Using PS3 in Downstream MLLMs
+
+Please refer to [VILA-HD repo](https://github.com/NVlabs/VILA/tree/main/vila_hd).
 
 ## Contributing
 
