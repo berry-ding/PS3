@@ -300,15 +300,15 @@ class PS3VisionModel(PS3PreTrainedModel):
 
 `num_look_close`: how many times to run high-res selection and encoding. PS3 selects and processes 2560 patches each time. If set to `all` then it selects all the high-res patches. If set to `0` then PS3 only returns the low-res features. If set to a larger number than what it needs to encode all the high-res patches, then PS3 will clamp it to the max number needed.
 
-`num_token_look_close`: (optinoal) how many high-res patches to select and process. Similar to `num_look_close` but counts the number of high-res tokens instead of number of running high-res encoding.
+`num_token_look_close`: (optinoal) how many high-res patches to select and process. Similar to `num_look_close` but `num_token_look_close` directly specifies the number of high-res tokens instead of number of running high-res encoding.
 
-`prompt`: (optional) the prompt embedding used to select high-res patches. The prompt embedding can be embedding of some text, or some embedding output by an LLM (see paper). The shape of prompt embedding is (B, C) where B is the batch size (same in `pixel_values`) and C is the embedding dimension (same as PS3 token embedding dimension). If `prompt=None`, then PS3 will select high-res patches based on visual saliency (bottom-up selection).
+`prompt`: (optional) the prompt embedding used to select high-res patches. The prompt embedding can be embedding of some text, or some embedding output by an LLM (see the paper). The shape of prompt embedding is (B, C) where B is the batch size (same in `pixel_values`) and C is the embedding dimension (same as PS3 token embedding dimension). If `prompt=None`, then PS3 will select high-res patches based on visual saliency (bottom-up selection).
 
-`gt_selection_maps`: (optional) the ground truth selection maps for the image. It should be a tensor of 0/1 values with shape (B, h, w). Regions with value 1 means they should be selected. When selectin high-res patches, PS3 will interpolate the `gt_selection_maps` to the same size as the feature map at each scale, prioritize selecting the tokens where the value is 1, and if there's still budget for selecting more tokens, select the rest based on the original selection probability.
+`gt_selection_maps`: (optional) the ground truth selection maps for the image. It should be a tensor of 0/1 values with shape (B, h, w). Regions with value 1 means they should be selected. When selecting high-res patches, PS3 will interpolate the `gt_selection_maps` to the same size as the feature map at each scale, prioritize selecting the tokens where the value is 1, and if there's still budget for selecting more tokens, it will select the rest based on the original selection probability.
 
-`smooth_selection_prob`: (optional) smooth the selectino probability map such that the selected patches won't be distributed too scarcely each time it runs high-res selection. It slightly improves the performance occasinoally when selecting all the patches but usually hurts when selecting parts of the patches.
+`smooth_selection_prob`: (optional) smooth the selection probability map such that the selected patches won't be distributed too scarcely each time it runs high-res selection. It slightly improves the performance occasinoally when selecting all the patches but usually hurts when selecting parts of the patches.
 
-`only_select_first_n_scale`: (optional) only select the first n high-res scales. For example, for PS3-4K model, if `only_select_first_n_scale=2`, then only select and process scales of 756 and 1512, and ignore the scale of 3780.
+`only_select_first_n_scale`: (optional) only select the first n high-res scales. For example, for PS3-4K model, if `only_select_first_n_scale=2`, then it only selects and processes scales of 756 and 1512, and ignores the scale of 3780.
 
 `is_global_text`: (optional) only return the pooled low-res feautres. *It will only be used during pre-training.*
 
