@@ -41,7 +41,7 @@ class PS3VisionConfig(PretrainedConfig):
         pretrained: bool = False,
         dynamic_img_size: bool = True,
         # ps3 args
-        s3_scales: list[int] = [378, 756, 1512], 
+        ps3_scales: list[int] = [378, 756, 1512], 
         select_based_on_layer: list[int] = [0, 9, 18, 26], 
         max_select_num: int = 1280, 
         max_select_num_each_scale: list[int] = None, 
@@ -73,7 +73,7 @@ class PS3VisionConfig(PretrainedConfig):
         self.patch_drop = patch_drop
         self.pretrained = pretrained
         self.dynamic_img_size = dynamic_img_size
-        self.s3_scales = s3_scales
+        self.ps3_scales = ps3_scales
         self.select_based_on_layer = select_based_on_layer
         self.max_select_num = max_select_num
         self.max_select_num_each_scale = max_select_num_each_scale
@@ -96,7 +96,7 @@ class PS3VisionConfig(PretrainedConfig):
 
         # Dummy config to make vila training code happy
         self.vision_tower_name = model_name
-        self.image_size = s3_scales[-1]
+        self.image_size = ps3_scales[-1]
         self.patch_size = 14
     
     @classmethod

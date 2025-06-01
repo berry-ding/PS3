@@ -133,37 +133,37 @@ class PS3VisionEncoder(nn.Module):
         self.trunk.selected_pos_embed = types.MethodType(selected_pos_embed, self.trunk)
 
         # Configure multi-scale processing
-        self.s3_scales = config.s3_scales
-        self.s3_scales.sort()
-        self.s3_image_size = self.s3_scales[-1]
+        self.ps3_scales = config.ps3_scales
+        self.ps3_scales.sort()
+        self.s3_image_size = self.ps3_scales[-1]
 
         # Set number of hidden layers to return (for memory efficiency)
         self.num_hidden_layers_to_return = self.layers
         warnings.warn(f"The number of hidden layers to return hidden states is currently set to {self.num_hidden_layers_to_return}. If this value is large, it can consume a lot of memory. Consider setting it to a smaller value if you won't use all the hidden states from every layer!")
-        self.low_res_token_num = self.trunk.low_res_token_num = (self.s3_scales[0] // self.trunk.patch_embed.patch_size[0]) ** 2
+        self.low_res_token_num = self.trunk.low_res_token_num = (self.ps3_scales[0] // self.trunk.patch_embed.patch_size[0]) ** 2
 
         # Token selection parameters
         self.max_select_num_each_scale = config.max_select_num_each_scale
         if config.max_select_num_each_scale is None:
             # Automatically distribute token selection budget across scales based on pixel counts
-            pixels_each_scale = [s**2 for s in self.s3_scales]
+            pixels_each_scale = [s**2 for s in self.ps3_scales]
             self.max_select_num_each_scale = [int(config.max_select_num * pixels_each_scale[i] / sum(pixels_each_scale[1:])) for i in range(1, len(pixels_each_scale))]
 
         # Feature projection for token selection
-        self.selection_feature_proj = Mlp(in_features=self.width * len(self.config.select_based_on_layer), hidden_features=self.width * len(self.config.select_based_on_layer), out_features=self.width * (len(self.s3_scales) - 1), norm_layer=nn.LayerNorm)
+        self.selection_feature_proj = Mlp(in_features=self.width * len(self.config.select_based_on_layer), hidden_features=self.width * len(self.config.select_based_on_layer), out_features=self.width * (len(self.ps3_scales) - 1), norm_layer=nn.LayerNorm)
         self.prior_prompt = nn.Parameter(torch.randn(self.width))
 
         # Optional separate positional embeddings for each scale
         if config.separate_pos_emb:
             self.pos_emb_residual = nn.ParameterList([
-                nn.Parameter(torch.zeros(1, (self.s3_scales[i] // self.trunk.patch_embed.patch_size[0]) ** 2, self.width))
-                for i in range(1, len(self.s3_scales))
+                nn.Parameter(torch.zeros(1, (self.ps3_scales[i] // self.trunk.patch_embed.patch_size[0]) ** 2, self.width))
+                for i in range(1, len(self.ps3_scales))
             ])
         
         # High-resolution feature extraction for token selection
         if self.config.highres_selection_feature:
             self.highres_selection_feature_module = ShallowConvNet(config)
-            self.prompt_proj_for_highres = nn.Linear(self.width, config.highres_selection_module_out_dim * (len(self.s3_scales) - 1))
+            self.prompt_proj_for_highres = nn.Linear(self.width, config.highres_selection_module_out_dim * (len(self.ps3_scales) - 1))
         
         assert kwargs.get('patch_dropout', 0) == 0, 'S3 currently does not support patch_dropout because otherwise we will get incomplete low-res feature map!'
 
@@ -190,15 +190,15 @@ class PS3VisionEncoder(nn.Module):
         """
         # For the lowest scale, we use square images at all times
         if scale_idx == 0:
-            return (self.s3_scales[0], self.s3_scales[0])
+            return (self.ps3_scales[0], self.ps3_scales[0])
         
         h, w = x.shape[-2:]
         if h >= w:
-            zoom_ratio = self.s3_scales[scale_idx] // self.s3_scales[0]
-            size = (self.s3_scales[0] * zoom_ratio, max(int(self.s3_scales[0] / h * w) // self.trunk.patch_embed.patch_size[0], 1) * self.trunk.patch_embed.patch_size[0] * zoom_ratio)
+            zoom_ratio = self.ps3_scales[scale_idx] // self.ps3_scales[0]
+            size = (self.ps3_scales[0] * zoom_ratio, max(int(self.ps3_scales[0] / h * w) // self.trunk.patch_embed.patch_size[0], 1) * self.trunk.patch_embed.patch_size[0] * zoom_ratio)
         else:
-            zoom_ratio = self.s3_scales[scale_idx] // self.s3_scales[0]
-            size = (max(int(self.s3_scales[0] / w * h) // self.trunk.patch_embed.patch_size[0], 1) * self.trunk.patch_embed.patch_size[0] * zoom_ratio, self.s3_scales[0] * zoom_ratio)
+            zoom_ratio = self.ps3_scales[scale_idx] // self.ps3_scales[0]
+            size = (max(int(self.ps3_scales[0] / w * h) // self.trunk.patch_embed.patch_size[0], 1) * self.trunk.patch_embed.patch_size[0] * zoom_ratio, self.ps3_scales[0] * zoom_ratio)
         return size
 
     def feature_size_scale_i(self, x, scale_idx):
@@ -227,7 +227,7 @@ class PS3VisionEncoder(nn.Module):
         Returns:
             int: Maximum number of high-resolution tokens
         """
-        feature_size_each_scale = [self.feature_size_scale_i(x, i) for i in range(1, len(self.s3_scales) if only_select_first_n_scale is None else max(only_select_first_n_scale) + 1)]
+        feature_size_each_scale = [self.feature_size_scale_i(x, i) for i in range(1, len(self.ps3_scales) if only_select_first_n_scale is None else max(only_select_first_n_scale) + 1)]
         max_token_num_each_scale = [size[0] * size[1] for size in feature_size_each_scale]
         return sum(max_token_num_each_scale)
     
@@ -263,7 +263,7 @@ class PS3VisionEncoder(nn.Module):
         
         # Incorporate high-res feature map if available for more accurate selection
         if highres_feature_map is not None:
-            high_res_prompt = rearrange(self.prompt_proj_for_highres(prompt), "b (ns c) -> b ns c", ns=len(self.s3_scales) - 1)
+            high_res_prompt = rearrange(self.prompt_proj_for_highres(prompt), "b (ns c) -> b ns c", ns=len(self.ps3_scales) - 1)
             highres_select_logits = (F.normalize(highres_feature_map, dim=1).unsqueeze(1) * F.normalize(high_res_prompt, dim=-1)[..., None, None]).sum(dim=2)  # B * num_scale * H * W
             select_logits = (select_logits + F.adaptive_max_pool2d(highres_select_logits, select_logits.shape[-2:])) / 2
         
@@ -280,7 +280,7 @@ class PS3VisionEncoder(nn.Module):
         select_probs = [F.interpolate(select_probs[:, i:i+1].float(), 
                                       size=self.feature_size_scale_i(input, i+1), 
                                       mode='nearest').squeeze(1).to(select_probs) 
-                        for i in range(len(self.s3_scales) - 1)]
+                        for i in range(len(self.ps3_scales) - 1)]
         
         return select_probs
 
@@ -316,7 +316,7 @@ class PS3VisionEncoder(nn.Module):
 
         # get selection logits for each scale
         feature_map = self.selection_feature_proj(feature_map.permute(0, 2, 3, 1))  # B * H * W * (num_scale * C)
-        feature_map = rearrange(feature_map, "b h w (ns c) -> b ns c h w", ns=len(self.s3_scales) - 1)
+        feature_map = rearrange(feature_map, "b h w (ns c) -> b ns c h w", ns=len(self.ps3_scales) - 1)
         
         # Calculate prior selection probabilities
         prior_select_probs = self._calculate_select_probs(
@@ -339,7 +339,7 @@ class PS3VisionEncoder(nn.Module):
 
         if select_with_gt:
             gt_selection_maps = F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, 1), mode='area').squeeze(1).to(gt_selection_maps)
-            gt_selection_maps = [F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, i+1), mode='nearest').squeeze(1).to(gt_selection_maps) for i in range(len(self.s3_scales) - 1)]
+            gt_selection_maps = [F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, i+1), mode='nearest').squeeze(1).to(gt_selection_maps) for i in range(len(self.ps3_scales) - 1)]
 
         if select_with_prior:
             select_probs = prior_select_probs   # list of B * H * W tensors, len(list) = num_scale - 1
@@ -383,7 +383,7 @@ class PS3VisionEncoder(nn.Module):
 
             # If old_selection_maps is provided, then only select new tokens
             if old_selection_maps is not None:
-                select_probs = [select_probs[i] * (1 - old_selection_maps[i]) + (-1) * old_selection_maps[i] for i in range(len(self.s3_scales) - 1)]
+                select_probs = [select_probs[i] * (1 - old_selection_maps[i]) + (-1) * old_selection_maps[i] for i in range(len(self.ps3_scales) - 1)]
             
             # Start selecting tokens
             select_probs_flatten = [prob.reshape(1, -1) for prob in select_probs]
@@ -564,7 +564,7 @@ class PS3VisionEncoder(nn.Module):
         """
         B = input.shape[0]
         high_res_tokens = []
-        for scale_id, scale in enumerate(self.s3_scales[1:]):
+        for scale_id, scale in enumerate(self.ps3_scales[1:]):
             # Skip if no token is selected at this scale
             if torch.all(selection_maps[scale_id] == 0):
                 continue
@@ -609,14 +609,14 @@ class PS3VisionEncoder(nn.Module):
             Various combinations of hidden states, KV cache, and output features depending on arguments
         """
         assert selection_maps[0].dim() == 3, "Each selection map must be with shape B * H * W"
-        assert len(selection_maps) == len(self.s3_scales) - 1, "Number of selection map must be the same as the number of high-res scales"
+        assert len(selection_maps) == len(self.ps3_scales) - 1, "Number of selection map must be the same as the number of high-res scales"
 
         input = x
         B = x.shape[0]
 
         # tokenize for high-res
         # If every sample in the batch has the same number of selected patches, then we can batchify the tokenization process
-        if all([torch.all(selection_maps[scale_id].flatten(1, 2).sum(dim=-1) == selection_maps[scale_id].flatten(1, 2).sum(dim=-1)[0]) for scale_id in range(len(self.s3_scales) - 1)]):
+        if all([torch.all(selection_maps[scale_id].flatten(1, 2).sum(dim=-1) == selection_maps[scale_id].flatten(1, 2).sum(dim=-1)[0]) for scale_id in range(len(self.ps3_scales) - 1)]):
             high_res_tokens = self.tokenize_high_res(input, selection_maps)
         
         # If different samples have different number of selected patches, then we need to process each sample individually
@@ -634,7 +634,7 @@ class PS3VisionEncoder(nn.Module):
         # If gt_selection_maps is given, then only pool the features within the gt_selection_mask
         if pool_gt_token_only:
             assert gt_selection_maps is not None
-            gt_selection_maps = [F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, i+1), mode='area').squeeze(1).to(gt_selection_maps) for i in range(len(self.s3_scales) - 1)]
+            gt_selection_maps = [F.interpolate(gt_selection_maps.unsqueeze(1).float(), size=self.feature_size_scale_i(input, i+1), mode='area').squeeze(1).to(gt_selection_maps) for i in range(len(self.ps3_scales) - 1)]
             gt_selection_maps_flat = torch.cat([smap.reshape(B, -1) for smap in gt_selection_maps], dim=-1)
             selection = torch.cat([smap.reshape(B, -1) for smap in selection_maps], dim=-1)  # B * N
             gt_selection_mask = gt_selection_maps_flat[selection.bool()].reshape(B, -1)
@@ -752,8 +752,8 @@ class PS3VisionEncoder(nn.Module):
                 pooled_output=pooled,
                 selection_maps=selection_maps,
                 selection_probs=select_probs,
-                prior_selection_probs=prior_select_probs,
-                posterior_selection_probs=posterior_select_probs
+                bottomup_selection_probs=prior_select_probs,
+                topdown_selection_probs=posterior_select_probs
             )
 
 
