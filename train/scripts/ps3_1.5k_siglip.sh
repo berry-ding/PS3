@@ -1,0 +1,38 @@
+#!/bin/bash
+
+torchrun --nnodes=1 --nproc_per_node=8 --master_port=25001 \
+    -m open_clip_train.main \
+    --model PS3-1.5K-SigLIP \
+    --pretrained webli \
+    --siglip \
+    --train-data-image <path_to_image_wds_dataset> \
+    --train-data-text-box <path_to_text_box_wds_dataset> \
+    --sentence_masking \
+    --select_w_gt \
+    --use_global_caption \
+    --pool_gt_token_only \
+    --global_caption_prob 0.25 \
+    --train-num-samples 1000000 \
+    --dataset-resampled \
+    --dataset-type webdataset_separate_image_text_box \
+    --batch-size 32 \
+    --epochs 75 \
+    --warmup 1500 \
+    --lr 5e-6 \
+    --beta1 0.9 \
+    --beta2 0.95 \
+    --wd 0.0003 \
+    --selection_prob_loss_weight 0 \
+    --prior_box_supervision_loss_weight 1 \
+    --posterior_box_supervision_loss_weight 1 \
+    --precision amp \
+    --grad-checkpointing \
+    --gather-with-grad \
+    --local-loss \
+    --workers 4 \
+    --name ps3_1.5k_siglip \
+    --resume latest \
+    --save-frequency 1 \
+    --save-most-recent \
+    --ddp-static-graph \
+    --report-to wandb
