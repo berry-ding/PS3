@@ -32,7 +32,7 @@
 <hr style="border: 2px solid gray;"></hr>
 
 ## Latest Updates
-- [2025.5.21] Models & code of PS3 and VILA-HD are released! We released two PS3 models (`PS3-1.5K-SigLIP` and `PS3-4K-SigLIP`) and two VILA-HD models (`VILA-HD-1.5K-8B-SigLIP` and `VILA-HD-4K-8B-SigLIP`).
+- [2025.6.4] Models & code of PS3 and VILA-HD are released! We released two PS3 models (`PS3-1.5K-SigLIP` and `PS3-4K-SigLIP`) and two VILA-HD models (`VILA-HD-1.5K-8B-SigLIP` and `VILA-HD-4K-8B-SigLIP`), and the corresponding training/inference code are also released.
 - [2025.4.22] Demo of VILA-HD is released! Welcome to give it a try. We are actively improving the model so any feedback is welcome!
 - [2025.4.4] Selected as conference highlight at CVPR 2025. See you in Nashville!
 - [2025.3.24] Initial paper release. Code and weights of PS3 and VILA-HD will be released very soon!
@@ -317,7 +317,7 @@ class PS3VisionModel(PS3PreTrainedModel):
 
 ## Training
 
-Coming soon.
+Please see `train/`.
 
 ## Using PS3 in Downstream MLLMs
 

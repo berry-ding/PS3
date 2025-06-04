@@ -470,10 +470,7 @@ class CustomTextCLIP(nn.Module):
         
         self.ps3 = vision_cfg.get("ps3", False) if isinstance(vision_cfg, dict) else vision_cfg.ps3
         if self.ps3:
-            if "ps3_feature_proj" in vision_cfg and vision_cfg["ps3_feature_proj"] == "mlp":
-                self.prompt_proj = Mlp(in_features=self.text.output_dim, hidden_features=self.visual.width, out_features=self.visual.width, norm_layer=nn.LayerNorm)
-            else:
-                self.prompt_proj = nn.Linear(self.text.output_dim, self.visual.width)
+            self.prompt_proj = Mlp(in_features=self.text.output_dim, hidden_features=self.visual.width, out_features=self.visual.width, norm_layer=nn.LayerNorm)
 
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         # lock image tower as per LiT - https://arxiv.org/abs/2111.07991
