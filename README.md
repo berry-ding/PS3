@@ -68,15 +68,15 @@ To use VILA-HD models, please refer to [VILA-HD repo](https://github.com/NVlabs/
 
 See Table 1 in the paper for full results.
 
-| Vision Model        | Pre-Trained Weights                                                     | Max Resolution | # High-Res Token | TextVQA | ChartQA | DocVQA | InfoVQA | OCRBench | V*Bench | RealWorldQA | Avg  |
-|---------------------|-------------------------------------------------------------------------|----------------|------------------|---------|---------|--------|---------|----------|---------|-------------|------|
-| SigLIP              |                                                                         | 378            | 0                | 62.3    | 56.6    | 51.9   | 30.7    | 387      | 51.8    | 57.1        | 49.9 |
-| SigLIP + AnyRes     |                                                                         | 1512           | 3136             | 67.4    | 58.4    | 67.9   | 34.1    | 468      | 60.2    | 59.0        | 56.3 |
-| SigLIP + S<sup>2</sup>         |                                                                         | 1512           | 2916             | 66.1    | 71.0    | 78.3   | 41.1    | 526      | 55.2    | 61.0        | 60.8 |
-| **PS3-1.5K-SigLIP** | [nvidia/PS3-1.5K-SigLIP](https://huggingface.co/nvidia/PS3-1.5K-SigLIP) | 1512           | 3645             | 69.3    | 71.1    | 79.4   | 41.3    | 534      | 64.0    | 63.8        | 63.2 |
-| SigLIP + AnyRes     |                                                                         | 3780           | 19600            | OOM     | OOM     | OOM    | OOM     | OOM      | OOM     | OOM         | OOM  |
-| SigLIP + S<sup>2</sup>         |                                                                         | 3780           | 18225            | OOM     | OOM     | OOM    | OOM     | OOM      | OOM     | OOM         | OOM  |
-| **PS3-4K-SigLIP**   | [nvidia/PS3-4K-SigLIP](https://huggingface.co/nvidia/PS3-4K-SigLIP)     | 3780           | 3840             | 69.8    | 70.9    | 79.1   | 40.5    | 543      | 67.8    | 64.7        | 63.9 |
+| <div style="width:130px">Vision Model</div>    | <div style="width:120px">Max Resolution</div> | <div style="width:140px"># High-Res Token</div> | TextVQA | ChartQA | DocVQA | InfoVQA | OCRBench | V*Bench | RealWorldQA | Avg  |
+|---------------------|----------------|------------------|---------|---------|--------|---------|----------|---------|-------------|------|
+| SigLIP              | 378            | 0                | 62.3    | 56.6    | 51.9   | 30.7    | 387      | 51.8    | 57.1        | 49.9 |
+| SigLIP + AnyRes     | 1512           | 3136             | 67.4    | 58.4    | 67.9   | 34.1    | 468      | 60.2    | 59.0        | 56.3 |
+| SigLIP + S<sup>2</sup>         | 1512           | 2916             | 66.1    | 71.0    | 78.3   | 41.1    | 526      | 55.2    | 61.0        | 60.8 |
+| **PS3-1.5K-SigLIP** | 1512           | 3645             | 69.3    | 71.1    | 79.4   | 41.3    | 534      | 64.0    | 63.8        | 63.2 |
+| SigLIP + AnyRes     | 3780           | 19600            | OOM     | OOM     | OOM    | OOM     | OOM      | OOM     | OOM         | OOM  |
+| SigLIP + S<sup>2</sup>         | 3780           | 18225            | OOM     | OOM     | OOM    | OOM     | OOM      | OOM     | OOM         | OOM  |
+| **PS3-4K-SigLIP**     | 3780           | 3840             | 69.8    | 70.9    | 79.1   | 40.5    | 543      | 67.8    | 64.7        | 63.9 |
 
 
 ### Performance of VILA-HD models
