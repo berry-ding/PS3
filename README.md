@@ -27,7 +27,16 @@
   </a><sup style="font-size: 0.6em;">2</sup> NVIDIA&nbsp;&nbsp;&nbsp;
 </div>
 
+
 </div>
+
+<hr style="border: 2px solid gray;"></hr>
+
+## TL;DR
+
+We propose PS3, a vision encoder that scales up vision pre-training to 4K resolution with a near-constant cost. We further present VILA-HD which uses PS3 in MLLM and achieves superior results on resolution-sensitive benchmarks.
+
+![Teaser](assets/teaser.png)
 
 <hr style="border: 2px solid gray;"></hr>
 
@@ -79,7 +88,13 @@ See Table 1 in the paper for full results.
 | **PS3-4K-SigLIP**     | 3780           | 3840             | 69.8    | 70.9    | 79.1   | 40.5    | 543      | 67.8    | 64.7        | 63.9 |
 
 
-### Performance of VILA-HD models
+### Performance of VILA-HD models on common benchmarks
+
+![Performance of VILA-HD models on common benchmarks](assets/vila_hd_results.png)
+
+### Performance of VILA-HD models on 4KPro benchmark
+
+![Performance of VILA-HD models on 4KPro benchmark](assets/4kpro_results.png)
 
 Please refer to [VILA-HD repo](https://github.com/NVlabs/VILA/tree/main/vila_hd).
 
