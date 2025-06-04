@@ -68,7 +68,7 @@ To use VILA-HD models, please refer to [VILA-HD repo](https://github.com/NVlabs/
 
 See Table 1 in the paper for full results.
 
-| <div style="width:130px">Vision Model</div>    | <div style="width:120px">Max Resolution</div> | <div style="width:140px"># High-Res Token</div> | TextVQA | ChartQA | DocVQA | InfoVQA | OCRBench | V*Bench | RealWorldQA | Avg  |
+| Model&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;     | Resolution | #&nbsp;HighRes&nbsp;Token | TextVQA | ChartQA | DocVQA | InfoVQA | OCRBench | V*Bench | RealWorldQA | Avg  |
 |---------------------|----------------|------------------|---------|---------|--------|---------|----------|---------|-------------|------|
 | SigLIP              | 378            | 0                | 62.3    | 56.6    | 51.9   | 30.7    | 387      | 51.8    | 57.1        | 49.9 |
 | SigLIP + AnyRes     | 1512           | 3136             | 67.4    | 58.4    | 67.9   | 34.1    | 468      | 60.2    | 59.0        | 56.3 |
