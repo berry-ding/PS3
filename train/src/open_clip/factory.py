@@ -402,7 +402,7 @@ def create_model(
 
         if checkpoint_path:
             logging.info(f'Loading pretrained {model_name} weights ({pretrained}).')
-            load_checkpoint(model, checkpoint_path, strict=True, weights_only=load_weights_only)
+            load_checkpoint(model, checkpoint_path, strict=False, weights_only=load_weights_only)
         else:
             error_str = (
                 f'Pretrained weights ({pretrained}) not found for model {model_name}.'
