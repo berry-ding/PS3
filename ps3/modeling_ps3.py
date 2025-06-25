@@ -111,7 +111,7 @@ class PS3VisionEncoder(nn.Module):
         self.trunk.radio = config.radio
         if config.radio:
             try:
-                from .radio_adapter_mlp import create_mlp_from_config
+                from .utils_radio_adapter_mlp import create_mlp_from_config
             except ImportError:
                 raise ImportError("Please import the create_mlp_from_config function from https://github.com/NVlabs/RADIO/blob/main/radio/adaptor_mlp.py.")
             # Remove the final norm
