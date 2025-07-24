@@ -672,7 +672,7 @@ class PS3VisionEncoder(nn.Module):
             PS3VisionModelOutput: Model outputs including features, selection maps, etc.
         """
         # get low-res features
-        low_res_outs = self.forward_low_res(x, output_hidden_states=True, return_kv_cache=True)
+        low_res_outs = self.forward_low_res(x, output_hidden_states=True, return_kv_cache=True if not (num_look_close == 0 or num_token_look_close == 0) else False)
         low_res_hidden_states, low_res_kv_cache, low_res_pooled = low_res_outs["hidden_states"], low_res_outs["output_kv_cache"], low_res_outs["x"]
         
         # Extract features for token selection from specified layers
@@ -828,6 +828,9 @@ class PS3VisionModel(PS3PreTrainedModel):
             assert num_look_close is None, "num_look_close must be None in pre-training mode since during pre-training, the model only looks close once at all times"
             assert num_token_look_close is None, "num_token_look_close must be None in pre-training mode since during pre-training, the model only looks close once at all times"
             assert only_select_first_n_scale is None, "only_select_first_n_scale must be None in pre-training mode since during pre-training, the model selects all the scales at all times"
+        
+        if only_select_first_n_scale is not None and isinstance(only_select_first_n_scale, int):
+            only_select_first_n_scale = [only_select_first_n_scale for _ in range(len(pixel_values))]
 
         return self.vision_model(
             x=pixel_values,
@@ -1404,11 +1407,11 @@ def forward_after_tokenize_w_kvcache(self, x, kv_cache=None, return_kv_cache=Fal
     x = self.fc_norm(x)
     x = self.head_drop(x)
 
-    outs = {"x": self.head(x)}
-    if output_hidden_states:
-        outs["hidden_states"] = hidden_states
-    if return_kv_cache:
-        outs["output_kv_cache"] = torch.stack(output_kv_cache, dim=0)
+    outs = {
+        "x": self.head(x),
+        "hidden_states": hidden_states if output_hidden_states else None,
+        "output_kv_cache": torch.stack(output_kv_cache, dim=0) if return_kv_cache else None,
+    }
     
     return outs
 
